@@ -8,7 +8,7 @@ from pathlib import Path
 from fastmcp import FastMCP
 from pydantic import ValidationError
 
-from schemas import ManualSnippet, SystemStatus
+from schemas import JiraTicket, ManualSnippet, SystemStatus
 
 mcp = FastMCP(name="ict-operations-support")
 
@@ -148,3 +148,41 @@ def get_incident_runbook(incident_type: str) -> str:
         return runbook_path.read_text(encoding="utf-8")
     except (OSError, UnicodeError):
         return f"# Runbook Unavailable\n\nUnable to read runbook for incident type: {incident_type}"
+
+
+@mcp.tool()
+def search_jira_tickets(
+    query: str,
+    project_key: str = "OPS",
+    max_results: int = 5,
+) -> list[JiraTicket]:
+    """Jira 티켓을 모의 검색합니다. 현재는 JIRA 설정과 무관하게 실제 API를 호출하지 않습니다."""
+    query = query.strip()
+    project_key = project_key.strip().upper()
+    if not query:
+        raise ValueError("Jira 티켓 검색어를 입력하세요.")
+    if not re.fullmatch(r"[A-Z][A-Z0-9_]*", project_key):
+        raise ValueError("Jira 프로젝트 키는 영문자로 시작하는 영문자, 숫자, 밑줄로 입력하세요.")
+    if not 0 <= max_results <= 100:
+        raise ValueError("최대 결과 수는 0에서 100 사이로 입력하세요.")
+
+    updated_at = datetime.now(timezone.utc)
+    samples = [
+        JiraTicket(
+            key=f"{project_key}-101",
+            summary=f"[mock] '{query}' 관련 incident 조사",
+            status="In Progress",
+            priority="High",
+            assignee="ops-oncall@example.com",
+            updated=updated_at,
+        ),
+        JiraTicket(
+            key=f"{project_key}-87",
+            summary=f"[mock] '{query}' 과거 발생 사례",
+            status="Done",
+            priority="Medium",
+            assignee=None,
+            updated=updated_at,
+        ),
+    ]
+    return samples[:max_results]
