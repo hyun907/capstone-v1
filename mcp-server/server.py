@@ -161,8 +161,8 @@ def search_jira_tickets(
     project_key = project_key.strip().upper()
     if not query:
         raise ValueError("Jira 티켓 검색어를 입력하세요.")
-    if not re.fullmatch(r"[A-Z][A-Z0-9_]*", project_key):
-        raise ValueError("Jira 프로젝트 키는 영문자로 시작하는 영문자, 숫자, 밑줄로 입력하세요.")
+    if not re.fullmatch(r"[A-Z][A-Z0-9]*", project_key):
+        raise ValueError("Jira 프로젝트 키는 영문자로 시작하는 영문자와 숫자로 입력하세요.")
     if not 0 <= max_results <= 100:
         raise ValueError("최대 결과 수는 0에서 100 사이로 입력하세요.")
 
