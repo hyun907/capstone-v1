@@ -52,6 +52,17 @@ npx @modelcontextprotocol/inspector@v1-latest uv run --extra vector python mcp-s
 
 서버는 같은 `FASTEMBED_CACHE_PATH`에서 `local_files_only=True`로 모델을 열어 검색할 때 네트워크를 사용하지 않습니다. 선택 의존성이 없거나 모델 캐시가 비어 있으면 벡터 검색은 설치 안내 오류를 반환합니다. runbook 디렉터리가 없으면 빈 목록을 반환합니다. 관련 없는 질의는 실습용 유사도 기준(`0.83`) 미만일 때 빈 목록을 반환하므로, 새 문서를 추가할 때 기준값을 다시 검증해야 합니다.
 
+### Backend 채팅 계약 준비
+
+FastAPI와 Agent 연결에 사용할 Python 의존성은 `backend` 선택 그룹에 있습니다. 현재는 채팅 요청·응답 스키마와 설정을 확인할 수 있으며, HTTP 채팅 엔드포인트는 다음 단계에서 추가합니다.
+
+```bash
+uv sync --locked --extra backend
+uv run --locked --extra backend python -c "from backend.config import AppSettings; from backend.schemas.chat import ChatRequest, ChatResponse; print(AppSettings().model_name)"
+```
+
+모델 이름은 `OPENAI_MODEL` 환경변수로 변경할 수 있고 기본값은 `gpt-4o`입니다. 이후 Agent 연결에 필요한 `OPENAI_API_KEY`도 프로세스 환경변수로 전달합니다. 로컬 `backend/.env`를 쓰는 경우 `uv run --env-file backend/.env --extra backend ...`로 불러올 수 있으며, 이 파일은 Git 추적에서 제외됩니다. `AppSettings.openai_api_key_configured`는 키를 출력·저장하지 않고 비어 있지 않은지만 확인합니다.
+
 ## 실습 데이터
 
 별도로 받은 `data-2`의 `monitoring.json`과 `runbooks/`는 로컬의 `mcp-server/data/`에 둡니다. 이 디렉터리는 Git 추적에서 제외되어 있으므로 새 환경에서는 데이터를 다시 배치해야 합니다. 참조 자료의 공유 권한을 확인하기 전에는 원본 파일을 커밋하지 않습니다.
