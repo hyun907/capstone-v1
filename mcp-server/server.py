@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from jira_create_api import _create_jira_cloud
 from jira_search_api import search_jira_cloud
 from schemas import JiraTicket, JiraTicketCreated, ManualSnippet, SystemStatus
+from manual_vector import search_vector_manual
 
 mcp = FastMCP(name="ict-operations-support")
 
@@ -20,18 +21,28 @@ DATA_DIR = Path(__file__).parent / "data"
 
 
 @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False})
-def search_operations_manual(query: str, top_k: int = 3) -> list[ManualSnippet]:
-    """로컬 실습용 runbook을 키워드 등장 횟수로 검색하는 mock 도구입니다.
+def search_operations_manual(
+    query: str,
+    top_k: int = 3,
+    mode: Literal["keyword", "vector"] = "keyword",
+) -> list[ManualSnippet]:
+    """로컬 runbook을 키워드 또는 선택적 벡터 검색으로 조회합니다.
 
-    공백으로 나눈 두 글자 이상 키워드를 사용하고, 점수 내림차순으로 최대 top_k건을
-    반환합니다. top_k는 1~20이며, 일치 항목이나 데이터 디렉터리가 없으면 빈 목록입니다.
+    기본 keyword 모드는 두 글자 이상 키워드 등장 횟수를 세는 mock 검색입니다.
+    vector 모드는 미리 설치한 로컬 다국어 모델로 의미 유사도를 비교합니다.
+    top_k는 1~20이며, 문서나 일치 항목이 없으면 빈 목록입니다.
     """
-    if not query.strip():
+    query = query.strip()
+    if not query:
         raise ValueError("검색어를 입력하세요.")
     if not 1 <= top_k <= 20:
         raise ValueError("top_k는 1 이상 20 이하로 입력하세요.")
 
-    return _mock_manual_search(query, top_k)
+    if mode == "keyword":
+        return _mock_manual_search(query, top_k)
+    if mode == "vector":
+        return search_vector_manual(query, top_k, DATA_DIR)
+    raise ValueError("검색 모드는 keyword 또는 vector만 사용할 수 있습니다.")
 
 
 def _mock_manual_search(query: str, top_k: int) -> list[ManualSnippet]:
