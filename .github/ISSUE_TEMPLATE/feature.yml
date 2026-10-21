@@ -1,0 +1,46 @@
+name: "✨ 기능·실습 작업"
+description: "한 단계의 구현 작업을 기록합니다."
+title: "[기능] "
+body:
+  - type: dropdown
+    id: phase
+    attributes:
+      label: 실습 단계
+      options:
+        - MCP Server
+        - FastAPI Integration
+        - Streaming
+        - Multi-Agent Streaming
+        - Observability & Eval
+        - Error Handling
+        - Cost & Latency
+        - Stateless Session
+        - Supervisor
+        - Refactoring
+        - 기타
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: 목표
+      description: 이번 작업으로 사용자나 시스템이 할 수 있게 되는 일을 적어 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 완료 기준
+      description: 확인 가능한 결과를 적어 주세요.
+      placeholder: |
+        - [ ] 요청에 대해 예상한 응답을 반환한다
+        - [ ] 실패 시 오류 이벤트를 전달한다
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: 확인 방법
+      description: 실행할 명령이나 수동 확인 절차를 적어 주세요.
+    validations:
+      required: false

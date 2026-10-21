@@ -1,0 +1,47 @@
+name: "🐛 버그 제보"
+description: "재현 가능한 오류를 기록합니다."
+title: "[버그] "
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: 영역
+      options:
+        - MCP Server
+        - Backend / Agent
+        - API / SSE
+        - Frontend
+        - 환경 설정
+        - 기타
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 실제 동작
+      description: 무엇이 잘못됐는지 적어 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대 동작
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 재현 방법
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 환경·로그
+      description: 버전과 관련 로그를 적되, API 키·개인 정보·실제 운영 데이터는 지워 주세요.
+    validations:
+      required: false

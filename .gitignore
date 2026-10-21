@@ -1,0 +1,25 @@
+# Local credentials and environment
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# Node / Next.js
+node_modules/
+.next/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local reference copies and editor files
+_ref/
+.DS_Store
+.idea/
+.vscode/
