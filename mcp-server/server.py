@@ -16,11 +16,18 @@ def get_incident_runbook(incident_type: str) -> str:
     if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", incident_type):
         return "# Invalid Incident Type\n\nUse a lowercase runbook name such as db-down."
 
+    data_dir = DATA_DIR.resolve()
     runbook_dir = (DATA_DIR / "runbooks").resolve()
+    if not runbook_dir.is_relative_to(data_dir):
+        return "# Invalid Incident Type\n\nThe runbook directory must stay in data."
+
     runbook_path = (runbook_dir / f"{incident_type}.md").resolve()
     if not runbook_path.is_relative_to(runbook_dir):
         return "# Invalid Incident Type\n\nThe runbook path must stay in runbooks."
     if not runbook_path.is_file():
         return f"# Runbook Not Found\n\nNo runbook for incident type: {incident_type}"
 
-    return runbook_path.read_text(encoding="utf-8")
+    try:
+        return runbook_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return f"# Runbook Unavailable\n\nUnable to read runbook for incident type: {incident_type}"
