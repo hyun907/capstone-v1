@@ -8,11 +8,72 @@ from pathlib import Path
 from fastmcp import FastMCP
 from pydantic import ValidationError
 
-from schemas import SystemStatus
+from schemas import ManualSnippet, SystemStatus
 
 mcp = FastMCP(name="ict-operations-support")
 
 DATA_DIR = Path(__file__).parent / "data"
+
+
+@mcp.tool()
+def search_operations_manual(query: str, top_k: int = 3) -> list[ManualSnippet]:
+    """로컬 실습용 runbook을 키워드 등장 횟수로 검색하는 mock 도구입니다.
+
+    공백으로 나눈 두 글자 이상 키워드를 사용하고, 점수 내림차순으로 최대 top_k건을
+    반환합니다. top_k는 1~20이며, 일치 항목이나 데이터 디렉터리가 없으면 빈 목록입니다.
+    """
+    if not query.strip():
+        raise ValueError("검색어를 입력하세요.")
+    if not 1 <= top_k <= 20:
+        raise ValueError("top_k는 1 이상 20 이하로 입력하세요.")
+
+    return _mock_manual_search(query, top_k)
+
+
+def _mock_manual_search(query: str, top_k: int) -> list[ManualSnippet]:
+    """로컬 runbook 본문을 순회하는 실습용 키워드 검색기."""
+    runbook_dir = DATA_DIR / "runbooks"
+    if not runbook_dir.exists():
+        return []
+
+    data_root = DATA_DIR.resolve()
+    runbook_root = runbook_dir.resolve()
+    if not runbook_root.is_relative_to(data_root):
+        raise RuntimeError("운영 매뉴얼 디렉터리 경로가 올바르지 않습니다.")
+
+    keywords = [word.lower() for word in query.split() if len(word) > 1]
+    if not keywords:
+        return []
+
+    scored: list[ManualSnippet] = []
+    for path in sorted(runbook_dir.glob("*.md")):
+        if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", path.stem):
+            continue
+        if not path.resolve().is_relative_to(runbook_root):
+            continue
+        try:
+            contents = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            raise RuntimeError("운영 매뉴얼 파일을 읽을 수 없습니다.") from None
+
+        lower = contents.lower()
+        score = sum(lower.count(keyword) for keyword in keywords)
+        if score == 0:
+            continue
+
+        first_match = min(lower.find(keyword) for keyword in keywords if keyword in lower)
+        snippet = contents[max(0, first_match - 80) : first_match + 220].strip()
+        scored.append(
+            ManualSnippet(
+                title=path.stem,
+                source=f"runbook://incident-response/{path.stem}",
+                snippet=snippet,
+                score=float(score),
+            )
+        )
+
+    scored.sort(key=lambda item: item.score, reverse=True)
+    return scored[:top_k]
 
 
 @mcp.tool()
