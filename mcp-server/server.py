@@ -4,11 +4,12 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 from fastmcp import FastMCP
 from pydantic import ValidationError
 
-from schemas import JiraTicket, ManualSnippet, SystemStatus
+from schemas import JiraTicket, JiraTicketCreated, ManualSnippet, SystemStatus
 
 mcp = FastMCP(name="ict-operations-support")
 
@@ -186,3 +187,40 @@ def search_jira_tickets(
         ),
     ]
     return samples[:max_results]
+
+
+@mcp.tool()
+def create_jira_ticket(
+    summary: str,
+    description: str,
+    project_key: str = "OPS",
+    issue_type: Literal["Bug", "Incident", "Task"] = "Incident",
+    priority: Literal["Highest", "High", "Medium", "Low"] = "High",
+) -> JiraTicketCreated:
+    """실제 Jira에 쓰지 않고 생성 결과를 모의 반환합니다.
+
+    JIRA_* 환경변수가 설정되어 있어도 외부 API를 호출하지 않습니다.
+    """
+    summary = summary.strip()
+    description = description.strip()
+    project_key = project_key.strip().upper()
+
+    if not summary:
+        raise ValueError("티켓 제목을 입력하세요.")
+    if not description:
+        raise ValueError("티켓 본문을 입력하세요.")
+    if not re.fullmatch(r"[A-Z][A-Z0-9]*", project_key):
+        raise ValueError("프로젝트 키는 영문자로 시작하는 영문자와 숫자만 사용할 수 있습니다.")
+    if issue_type not in ("Bug", "Incident", "Task"):
+        raise ValueError("지원하지 않는 이슈 유형입니다.")
+    if priority not in ("Highest", "High", "Medium", "Low"):
+        raise ValueError("지원하지 않는 우선순위입니다.")
+
+    key = f"{project_key}-9999"
+    return JiraTicketCreated(
+        key=key,
+        url=f"https://example.invalid/browse/{key}",
+        summary=f"[mock] {summary}",
+        status="To Do",
+        created_at=datetime.now(timezone.utc),
+    )
