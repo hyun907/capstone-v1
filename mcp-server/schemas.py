@@ -45,5 +45,5 @@ class JiraTicketCreated(BaseModel):
     key: str = Field(min_length=1, description="생성된 티켓 키")
     url: str = Field(min_length=1, description="티켓 조회 URL")
     summary: str = Field(min_length=1, description="제목")
-    status: str = Field(min_length=1, description="초기 상태")
-    created_at: datetime = Field(description="생성 시각 (ISO 8601)")
+    status: str = Field(min_length=1, description="생성 시점의 상태 (API 응답에 없으면 Unknown)")
+    created_at: datetime = Field(description="생성 결과를 확인한 시각 (ISO 8601)")
