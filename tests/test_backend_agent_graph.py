@@ -152,17 +152,16 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
                 {"configurable": {"thread_id": "loop-thread"}},
             )
 
-    async def test_tool_failure_is_sanitized(self) -> None:
+    async def test_tool_failure_propagates(self) -> None:
         agent = await build_agent(
             model=SyntheticChatModel(),
             tools=[failing_monitoring_status, search_operations_manual, search_jira_tickets],
         )
-        result = await agent.ainvoke(
-            {"messages": [{"role": "user", "content": "상태 확인"}]},
-            {"configurable": {"thread_id": "failed-tool-thread"}},
-        )
-        self.assertIn("조회 도구 실행에 실패", result["messages"][-1].content)
-        self.assertNotIn("synthetic-sensitive-internal-detail", result["messages"][-1].content)
+        with self.assertRaisesRegex(RuntimeError, "synthetic-sensitive-internal-detail"):
+            await agent.ainvoke(
+                {"messages": [{"role": "user", "content": "상태 확인"}]},
+                {"configurable": {"thread_id": "failed-tool-thread"}},
+            )
 
     async def test_rejects_missing_tools_and_invalid_limit(self) -> None:
         with self.assertRaisesRegex(ValueError, "필수 조회 도구"):
