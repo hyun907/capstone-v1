@@ -239,7 +239,7 @@ def create_jira_ticket(
     base_url = os.getenv("JIRA_BASE_URL")
     email = os.getenv("JIRA_EMAIL")
     token = os.getenv("JIRA_API_TOKEN")
-    if base_url and email and token:
+    if all(value and value.strip() for value in (base_url, email, token)):
         if not user_confirmed:
             raise PermissionError("실제 Jira 티켓 생성 전에 사용자 확인이 필요합니다.")
         return _create_jira_cloud(

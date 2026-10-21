@@ -154,6 +154,15 @@ class JiraCreateToolTests(unittest.TestCase):
             "JIRA_EMAIL": "fake@example.invalid",
             "JIRA_API_TOKEN": "fake-token",
         }
+        for empty_key in config:
+            with self.subTest(empty_key=empty_key), patch.dict(
+                "os.environ", {**config, empty_key: "  \t "}, clear=True
+            ), patch.object(server, "_create_jira_cloud") as create:
+                result = server.create_jira_ticket("제목", "본문", user_confirmed=True)
+                self.assertEqual(result.key, "OPS-9999")
+                self.assertTrue(result.summary.startswith("[mock] "))
+                create.assert_not_called()
+
         expected = JiraTicketCreated(
             key="OPS-123",
             url="https://team.atlassian.net/browse/OPS-123",
