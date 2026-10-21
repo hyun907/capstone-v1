@@ -74,7 +74,21 @@ uv sync --locked --extra backend
 uv run --locked --extra backend python -m unittest discover -s tests -p 'test_backend_mcp_client.py' -v
 ```
 
-이 단계는 도구 연결만 제공하며 HTTP 채팅 엔드포인트나 Agent 실행 흐름은 포함하지 않습니다.
+MCP 클라이언트는 도구 연결만 제공하며 HTTP 채팅 엔드포인트는 아직 없습니다.
+
+### 단일 Agent와 세션 메모리
+
+`backend.agent.graph.build_agent()`는 기존 MCP 클라이언트가 찾은 Tool 4개 중 조회용 3개(`get_monitoring_status`, `search_operations_manual`, `search_jira_tickets`)만 Agent에 연결합니다. `create_jira_ticket`은 채팅 요청 스키마에 신뢰할 수 있는 생성 승인값이 없어 제외했습니다. Agent에는 시스템 상태·매뉴얼·Jira 이력 질문에 맞는 조회 도구를 선택하고 mock 응답을 구분하도록 지시합니다. 도구 실행 실패는 내부 오류 내용을 빼고 안내합니다.
+
+모델은 기본 `gpt-4o`이며 `OPENAI_MODEL`로 변경할 수 있습니다. `MemorySaver`는 같은 Agent 인스턴스와 `configurable.thread_id`를 재사용할 때 대화를 이어 줍니다. 메모리는 프로세스 RAM에만 있고 재시작하면 사라집니다. Agent 실행에는 기본 `recursion_limit=12`를 적용해 도구 호출 반복을 제한합니다. 이번 단계에서는 원본 runbook이나 모니터링 데이터를 외부 모델로 보내지 않았습니다. 실제 실행 전에 데이터 사용 권한을 확인해야 합니다.
+
+외부 API와 원본 데이터를 쓰지 않는 합성 테스트:
+
+```bash
+uv run --locked --extra backend python -m unittest discover -s tests -p 'test_backend_agent_graph.py' -v
+```
+
+HTTP `/chat` 연결은 다음 단계에서 추가합니다.
 
 ## 실습 데이터
 
