@@ -29,7 +29,7 @@ uv run python mcp-server/server.py
 npx @modelcontextprotocol/inspector@v1-latest uv run python mcp-server/server.py
 ```
 
-Inspector에서 `get_monitoring_status`, `search_operations_manual`, `search_jira_tickets`, `create_jira_ticket` Tool과 `runbook://incident-response/{incident_type}` Resource Template, `incident_analysis_prompt` Prompt를 확인할 수 있습니다. Jira 검색·생성은 실제 API 대신 mock 결과를 반환합니다.
+Inspector에서 `get_monitoring_status`, `search_operations_manual`, `search_jira_tickets`, `create_jira_ticket` Tool과 `runbook://incident-response/{incident_type}` Resource Template, `incident_analysis_prompt` Prompt를 확인할 수 있습니다. Jira 검색은 `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`이 모두 설정되면 Jira Cloud를 조회하고, 누락 시 mock 결과를 반환합니다. Jira 생성은 아직 mock 결과만 반환합니다.
 
 ## 실습 데이터
 

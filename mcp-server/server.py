@@ -1,6 +1,7 @@
 """ICT 운영 지원 실습용 MCP 서버."""
 
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Literal
 from fastmcp import FastMCP
 from pydantic import ValidationError
 
+from jira_search_api import search_jira_cloud
 from schemas import JiraTicket, JiraTicketCreated, ManualSnippet, SystemStatus
 
 mcp = FastMCP(name="ict-operations-support")
@@ -157,16 +159,30 @@ def search_jira_tickets(
     project_key: str = "OPS",
     max_results: int = 5,
 ) -> list[JiraTicket]:
-    """Jira 티켓을 모의 검색합니다. 현재는 JIRA 설정과 무관하게 실제 API를 호출하지 않습니다."""
+    """JIRA_* 설정이 모두 있으면 Jira Cloud를 조회하고, 없으면 mock 결과를 반환합니다."""
     query = query.strip()
     project_key = project_key.strip().upper()
     if not query:
         raise ValueError("Jira 티켓 검색어를 입력하세요.")
+    if any(ord(char) < 32 or ord(char) == 127 for char in query):
+        raise ValueError("Jira 검색어에 제어 문자를 사용할 수 없습니다.")
     if not re.fullmatch(r"[A-Z][A-Z0-9]*", project_key):
         raise ValueError("Jira 프로젝트 키는 영문자로 시작하는 영문자와 숫자로 입력하세요.")
     if not 0 <= max_results <= 100:
         raise ValueError("최대 결과 수는 0에서 100 사이로 입력하세요.")
 
+    base_url = os.getenv("JIRA_BASE_URL")
+    email = os.getenv("JIRA_EMAIL")
+    token = os.getenv("JIRA_API_TOKEN")
+    if not all(value and value.strip() for value in (base_url, email, token)):
+        return _mock_jira_search(query, project_key, max_results)
+    if max_results == 0:
+        return []
+    return search_jira_cloud(query, project_key, max_results, base_url, email, token)
+
+
+def _mock_jira_search(query: str, project_key: str, max_results: int) -> list[JiraTicket]:
+    """Jira 연결 정보가 없는 실습 환경의 고정 예시입니다."""
     updated_at = datetime.now(timezone.utc)
     samples = [
         JiraTicket(
@@ -246,7 +262,7 @@ def incident_analysis_prompt(system_name: str, symptom: str) -> str:
 ## 진단 절차
 1. `get_monitoring_status` Tool로 시스템의 상태와 활성 알림을 조회하세요. 현재 모니터링 데이터는 로컬 실습용이므로 실제 운영 상태로 단정하지 마세요. 조회 실패나 `unknown` 상태도 보고하세요.
 2. 증상에 맞는 incident 유형을 판단하고 `runbook://incident-response/{{incident_type}}` Resource를 읽으세요. 예: `auth-failure`, `db-down`, `api-latency`. 해당 문서가 없으면 그 사실을 보고하세요.
-3. `search_jira_tickets` Tool로 관련 티켓을 조회하세요. 현재 Jira 결과는 실습용 mock이므로 실제 이력으로 단정하지 마세요.
+3. `search_jira_tickets` Tool로 관련 티켓을 조회하세요. `[mock]` 표시가 있는 결과는 실습용 예시이므로 실제 이력으로 단정하지 마세요.
 4. 조회 결과와 추정을 구분하여 가능한 원인, 영향 범위, 권장 조치와 남은 확인 사항을 정리하세요.
 5. 새 티켓이 필요하면 먼저 사용자에게 생성 여부를 명시적으로 확인하세요. 사용자가 승인한 뒤에만 `create_jira_ticket` Tool을 호출하세요. 현재 생성 결과는 실습용 mock입니다.
 
