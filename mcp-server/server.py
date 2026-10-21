@@ -16,7 +16,7 @@ mcp = FastMCP(name="ict-operations-support")
 DATA_DIR = Path(__file__).parent / "data"
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False})
 def search_operations_manual(query: str, top_k: int = 3) -> list[ManualSnippet]:
     """로컬 실습용 runbook을 키워드 등장 횟수로 검색하는 mock 도구입니다.
 
@@ -83,7 +83,7 @@ def _mock_manual_search(query: str, top_k: int) -> list[ManualSnippet]:
     return scored[:top_k]
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False})
 def get_monitoring_status(system_name: str) -> SystemStatus:
     """로컬 실습용 monitoring.json에서 시스템 상태와 활성 알림을 조회합니다."""
     system_name = system_name.strip()
@@ -151,7 +151,7 @@ def get_incident_runbook(incident_type: str) -> str:
         return f"# Runbook Unavailable\n\nUnable to read runbook for incident type: {incident_type}"
 
 
-@mcp.tool()
+@mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False})
 def search_jira_tickets(
     query: str,
     project_key: str = "OPS",
@@ -251,3 +251,7 @@ def incident_analysis_prompt(system_name: str, symptom: str) -> str:
 5. 새 티켓이 필요하면 먼저 사용자에게 생성 여부를 명시적으로 확인하세요. 사용자가 승인한 뒤에만 `create_jira_ticket` Tool을 호출하세요. 현재 생성 결과는 실습용 mock입니다.
 
 각 단계에서 실제로 얻은 결과와 실패·누락 사항을 사용자에게 보고하세요. 아직 호출하지 않은 도구의 결과를 만들어내지 마세요."""
+
+
+if __name__ == "__main__":
+    mcp.run()
