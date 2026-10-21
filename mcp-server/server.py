@@ -49,7 +49,13 @@ def _mock_manual_search(query: str, top_k: int) -> list[ManualSnippet]:
     for path in sorted(runbook_dir.glob("*.md")):
         if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", path.stem):
             continue
-        if not path.resolve().is_relative_to(runbook_root):
+        try:
+            resolved_path = path.resolve()
+        except RuntimeError:
+            continue
+        except OSError:
+            raise RuntimeError("운영 매뉴얼 파일 경로를 확인할 수 없습니다.") from None
+        if not resolved_path.is_relative_to(runbook_root):
             continue
         try:
             contents = path.read_text(encoding="utf-8")
