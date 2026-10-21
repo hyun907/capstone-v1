@@ -18,6 +18,10 @@ DATA_DIR = Path(__file__).parent / "data"
 @mcp.tool()
 def get_monitoring_status(system_name: str) -> SystemStatus:
     """로컬 실습용 monitoring.json에서 시스템 상태와 활성 알림을 조회합니다."""
+    system_name = system_name.strip()
+    if not system_name:
+        raise ValueError("시스템 이름을 입력하세요.")
+
     try:
         contents = (DATA_DIR / "monitoring.json").read_text(encoding="utf-8")
     except (OSError, UnicodeError):
