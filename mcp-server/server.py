@@ -10,6 +10,7 @@ from typing import Literal
 from fastmcp import FastMCP
 from pydantic import ValidationError
 
+from jira_create_api import _create_jira_cloud
 from jira_search_api import search_jira_cloud
 from schemas import JiraTicket, JiraTicketCreated, ManualSnippet, SystemStatus
 
@@ -212,10 +213,13 @@ def create_jira_ticket(
     project_key: str = "OPS",
     issue_type: Literal["Bug", "Incident", "Task"] = "Incident",
     priority: Literal["Highest", "High", "Medium", "Low"] = "High",
+    user_confirmed: bool = False,
 ) -> JiraTicketCreated:
-    """실제 Jira에 쓰지 않고 생성 결과를 모의 반환합니다.
+    """사용자 승인 후 Jira 티켓을 생성합니다.
 
-    JIRA_* 환경변수가 설정되어 있어도 외부 API를 호출하지 않습니다.
+    JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN이 모두 설정되면 실제 Jira에 기록합니다.
+    실제 생성에는 사용자 승인 후 user_confirmed=True가 필요합니다.
+    설정이 부족하면 실제 기록 없이 [mock] 결과를 반환합니다.
     """
     summary = summary.strip()
     description = description.strip()
@@ -231,6 +235,16 @@ def create_jira_ticket(
         raise ValueError("지원하지 않는 이슈 유형입니다.")
     if priority not in ("Highest", "High", "Medium", "Low"):
         raise ValueError("지원하지 않는 우선순위입니다.")
+
+    base_url = os.getenv("JIRA_BASE_URL")
+    email = os.getenv("JIRA_EMAIL")
+    token = os.getenv("JIRA_API_TOKEN")
+    if all(value and value.strip() for value in (base_url, email, token)):
+        if not user_confirmed:
+            raise PermissionError("실제 Jira 티켓 생성 전에 사용자 확인이 필요합니다.")
+        return _create_jira_cloud(
+            summary, description, project_key, issue_type, priority, base_url, email, token
+        )
 
     key = f"{project_key}-9999"
     return JiraTicketCreated(
@@ -264,7 +278,7 @@ def incident_analysis_prompt(system_name: str, symptom: str) -> str:
 2. 증상에 맞는 incident 유형을 판단하고 `runbook://incident-response/{{incident_type}}` Resource를 읽으세요. 예: `auth-failure`, `db-down`, `api-latency`. 해당 문서가 없으면 그 사실을 보고하세요.
 3. `search_jira_tickets` Tool로 관련 티켓을 조회하세요. `[mock]` 표시가 있는 결과는 실습용 예시이므로 실제 이력으로 단정하지 마세요.
 4. 조회 결과와 추정을 구분하여 가능한 원인, 영향 범위, 권장 조치와 남은 확인 사항을 정리하세요.
-5. 새 티켓이 필요하면 먼저 사용자에게 생성 여부를 명시적으로 확인하세요. 사용자가 승인한 뒤에만 `create_jira_ticket` Tool을 호출하세요. 현재 생성 결과는 실습용 mock입니다.
+5. 새 티켓이 필요하면 먼저 사용자에게 생성 여부를 명시적으로 확인하세요. 사용자가 승인한 뒤에만 `create_jira_ticket` Tool을 `user_confirmed=True`로 호출하세요. Jira 설정 세 값이 모두 있으면 실제 티켓이 생성되고, 설정이 부족하면 실습용 mock 결과가 반환됩니다.
 
 각 단계에서 실제로 얻은 결과와 실패·누락 사항을 사용자에게 보고하세요. 아직 호출하지 않은 도구의 결과를 만들어내지 마세요."""
 

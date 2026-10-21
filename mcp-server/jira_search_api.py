@@ -1,36 +1,12 @@
 """Jira Cloud 검색 응답을 MCP 검색 도구의 데이터 계약으로 변환합니다."""
 
 import re
-from urllib.parse import urlsplit
 
 import httpx
 from pydantic import ValidationError
 
+from jira_site import jira_site_url
 from schemas import JiraTicket
-
-
-def _jira_site_url(base_url: str) -> str:
-    """API 토큰을 전송할 수 있는 Jira Cloud 사이트 주소만 허용합니다."""
-    try:
-        parts = urlsplit(base_url.strip())
-        host = parts.hostname
-        port = parts.port
-    except ValueError:
-        raise ValueError("Jira 사이트 주소 형식이 올바르지 않습니다.") from None
-
-    if (
-        parts.scheme != "https"
-        or host is None
-        or re.fullmatch(r"[a-z0-9][a-z0-9-]*\.atlassian\.net", host) is None
-        or port is not None
-        or parts.username is not None
-        or parts.password is not None
-        or parts.path not in ("", "/")
-        or parts.query
-        or parts.fragment
-    ):
-        raise ValueError("Jira 사이트 주소는 https://<사이트>.atlassian.net 형식이어야 합니다.")
-    return f"https://{host}"
 
 
 def _jql_search_term(query: str) -> str:
@@ -79,7 +55,7 @@ def search_jira_cloud(
     transport: httpx.BaseTransport | None = None,
 ) -> list[JiraTicket]:
     """Jira Cloud 검색을 수행합니다. transport는 외부 호출 없는 검증에만 사용합니다."""
-    site_url = _jira_site_url(base_url)
+    site_url = jira_site_url(base_url)
     if re.fullmatch(r"[A-Z][A-Z0-9]*", project_key) is None:
         raise ValueError("Jira 프로젝트 키는 영문자로 시작하는 영문자와 숫자로 입력하세요.")
     if not 1 <= max_results <= 100:
