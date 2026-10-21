@@ -104,6 +104,12 @@ uv run --locked --extra backend uvicorn backend.main:app
 uv run --locked --extra backend python -m unittest discover -s tests -p 'test_backend_main.py' -v
 ```
 
+### FastAPI 통합 검증
+
+별도 작업 트리의 Git 추적 제외 `mcp-server/data/`에 합성 runbook과 모니터링 데이터를 두고, 로컬에서 H·T1·T2·T3·E1·E2를 `curl`로 확인했습니다. OpenAI 호출에는 이 합성 데이터만 사용했으며 원본 운영 자료는 보내지 않았습니다. T2와 T3는 같은 `thread_id`를 사용했고, T3의 Jira 검색 인자에 `auth-service`가 기록됐습니다.
+
+E1의 안내 문구만 보낸 요청은 Agent가 검색어를 되물어 도구를 호출하지 않았습니다. 구체적인 매뉴얼 검색 요청으로 다시 확인했을 때 MCP subprocess에서 권한 오류가 발생했고, `/chat`은 HTTP 200과 검색 실패 안내를 반환했습니다. 테스트 후 `mcp-server/server.py` 권한을 `644`로 복구했습니다. 실제 관찰값과 터미널 캡처는 로컬 제출물에만 보관합니다.
+
 ## 실습 데이터
 
 별도로 받은 `data-2`의 `monitoring.json`과 `runbooks/`는 로컬의 `mcp-server/data/`에 둡니다. 이 디렉터리는 Git 추적에서 제외되어 있으므로 새 환경에서는 데이터를 다시 배치해야 합니다. 참조 자료의 공유 권한을 확인하기 전에는 원본 파일을 커밋하지 않습니다.
