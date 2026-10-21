@@ -1,6 +1,8 @@
 name: "✨ 기능·실습 작업"
 description: "한 단계의 구현 작업을 기록합니다."
-title: "[기능] "
+title: "[Feat] "
+labels: ["enhancement"]
+assignees: ["hyun907"]
 body:
   - type: dropdown
     id: phase
