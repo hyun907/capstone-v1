@@ -20,7 +20,7 @@ AI Agent 서비스를 단계별로 직접 구현하고 검증하는 개인 실�
 
 ## 로컬 환경
 
-Python 의존성 설정 파일이 준비된 경우 프로젝트 루트에서 `uv sync --locked`로 환경을 구성합니다. 서비스 실행 방법은 해당 구성요소가 구현되면 추가합니다. API 키와 연결 정보는 `.env` 같은 추적 제외 파일에 보관합니다.
+Python 3.11과 `uv`를 사용합니다. 프로젝트 루트에서 `uv sync --locked`로 MCP 서버 의존성을 설치하고, `uv run python -c "from fastmcp import FastMCP; from pydantic import BaseModel"`로 import를 확인할 수 있습니다. MCP 서버 실행 방법은 실행 구문을 구현한 뒤 추가합니다. API 키와 연결 정보는 `.env` 같은 추적 제외 파일에 보관합니다.
 
 ## 실습 데이터
 
