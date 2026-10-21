@@ -21,6 +21,7 @@ next-env.d.ts
 # Local reference copies and editor files
 _ref/
 /mcp-server/data
+/.model-cache/
 .DS_Store
 .idea/
 .vscode/
