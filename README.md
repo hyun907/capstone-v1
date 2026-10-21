@@ -63,6 +63,19 @@ uv run --locked --extra backend python -c "from backend.config import AppSetting
 
 모델 이름은 `OPENAI_MODEL` 환경변수로 변경할 수 있고 기본값은 `gpt-4o`입니다. 이후 Agent 연결에 필요한 `OPENAI_API_KEY`도 프로세스 환경변수로 전달합니다. 로컬 `backend/.env`를 쓰는 경우 `uv run --env-file backend/.env --extra backend ...`로 불러올 수 있으며, 이 파일은 Git 추적에서 제외됩니다. `AppSettings.openai_api_key_configured`는 키를 출력·저장하지 않고 비어 있지 않은지만 확인합니다.
 
+### Backend MCP 도구 연결
+
+Backend에서는 `backend.agent.mcp_client.create_mcp_client()`로 로컬 MCP 서버 연결을 구성합니다. `await client.get_tools()`를 호출하면 현재 Python 실행 파일과 서버 파일의 절대 경로로 stdio subprocess를 열고 LangChain Tool 4개를 불러옵니다. 반환된 Tool은 `await tool.ainvoke({...})`로 호출합니다.
+
+이 어댑터는 `get_tools()`가 탐색할 때 세션을 열었다가 닫고, 반환된 Tool을 호출할 때도 새 세션과 subprocess를 엽니다. 따라서 Tool 목록을 가져온 뒤 서버가 계속 실행 중이라고 가정하면 안 됩니다. Jira 연결 설정과 벡터 모델 캐시 경로를 사용할 경우 `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, `FASTEMBED_CACHE_PATH`만 서버 subprocess에 전달합니다. 값은 로그에 출력하지 않습니다.
+
+```bash
+uv sync --locked --extra backend
+uv run --locked --extra backend python -m unittest discover -s tests -p 'test_backend_mcp_client.py' -v
+```
+
+이 단계는 도구 연결만 제공하며 HTTP 채팅 엔드포인트나 Agent 실행 흐름은 포함하지 않습니다.
+
 ## 실습 데이터
 
 별도로 받은 `data-2`의 `monitoring.json`과 `runbooks/`는 로컬의 `mcp-server/data/`에 둡니다. 이 디렉터리는 Git 추적에서 제외되어 있으므로 새 환경에서는 데이터를 다시 배치해야 합니다. 참조 자료의 공유 권한을 확인하기 전에는 원본 파일을 커밋하지 않습니다.
