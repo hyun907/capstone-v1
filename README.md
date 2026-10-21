@@ -78,7 +78,7 @@ MCP 클라이언트는 도구 연결만 제공합니다. HTTP 엔드포인트에
 
 ### 단일 Agent와 세션 메모리
 
-`backend.agent.graph.build_agent()`는 기존 MCP 클라이언트가 찾은 Tool 4개 중 조회용 3개(`get_monitoring_status`, `search_operations_manual`, `search_jira_tickets`)만 Agent에 연결합니다. `create_jira_ticket`은 채팅 요청 스키마에 신뢰할 수 있는 생성 승인값이 없어 제외했습니다. Agent에는 시스템 상태·매뉴얼·Jira 이력 질문에 맞는 조회 도구를 선택하고 mock 응답을 구분하도록 지시합니다. 도구 실행 실패는 내부 오류 내용을 빼고 안내합니다.
+`backend.agent.graph.build_agent()`는 기존 MCP 클라이언트가 찾은 Tool 4개 중 조회용 3개(`get_monitoring_status`, `search_operations_manual`, `search_jira_tickets`)만 Agent에 연결합니다. `create_jira_ticket`은 채팅 요청 스키마에 신뢰할 수 있는 생성 승인값이 없어 제외했습니다. Agent에는 시스템 상태·매뉴얼·Jira 이력 질문에 맞는 조회 도구를 선택하고 mock 응답을 구분하도록 지시합니다. 이번 FastAPI 통합 단계에서는 도구 실행 오류를 잡지 않고 Backend까지 전파합니다.
 
 모델은 기본 `gpt-4o`이며 `OPENAI_MODEL`로 변경할 수 있습니다. `MemorySaver`는 같은 Agent 인스턴스와 `configurable.thread_id`를 재사용할 때 대화를 이어 줍니다. 메모리는 프로세스 RAM에만 있고 재시작하면 사라집니다. Agent 실행에는 기본 `recursion_limit=12`를 적용해 도구 호출 반복을 제한합니다. 합성 테스트에서는 원본 데이터를 외부 모델로 보내지 않습니다. 실제 `/chat` 실행에서는 검색 도구의 반환 내용이 모델에 전달되므로 데이터 사용 권한을 확인해야 합니다.
 
@@ -108,7 +108,7 @@ uv run --locked --extra backend python -m unittest discover -s tests -p 'test_ba
 
 초기 검증에서는 별도 작업 트리의 Git 추적 제외 `mcp-server/data/`에 합성 runbook과 모니터링 데이터를 두고, 로컬에서 H·T1·T2·T3·E1·E2를 `curl`로 확인했습니다. 이때 OpenAI 호출에는 합성 데이터만 사용했습니다. T2와 T3는 같은 `thread_id`를 사용했고, T3의 Jira 검색 인자에 `auth-service`가 기록됐습니다.
 
-E1의 안내 문구만 보낸 요청은 Agent가 검색어를 되물어 도구를 호출하지 않았습니다. 구체적인 매뉴얼 검색 요청으로 다시 확인했을 때 MCP subprocess에서 권한 오류가 발생했고, `/chat`은 HTTP 200과 검색 실패 안내를 반환했습니다. 테스트 후 `mcp-server/server.py` 권한을 `644`로 복구했습니다. 실제 관찰값과 터미널 캡처는 로컬 제출물에만 보관합니다.
+초기 E1 검증에서는 도구 오류를 안내 문구로 바꾸는 미들웨어 때문에 구체적인 매뉴얼 검색 요청에도 HTTP 200이 반환됐습니다. 이번 단계에서 해당 미들웨어를 제거하고 원본 데이터로 다시 검증한 결과, MCP subprocess 실행 권한 오류가 `/chat`의 HTTP 500으로 전파됐습니다. 안내 문구만 보낸 요청은 검색어를 되물어 도구를 호출하지 않았습니다. 테스트 후 `mcp-server/server.py` 권한을 `644`로 복구했습니다. 실제 관찰값과 터미널 캡처는 로컬 제출물에만 보관합니다.
 
 제출용 재검증에서는 다운로드한 `data-2`의 `monitoring.json`과 runbook 3개가 로컬 `mcp-server/data/`의 파일과 각각 바이트 단위로 일치함을 확인하고 같은 여섯 항목을 다시 실행했습니다. T1은 원본 runbook 검색, T2는 원본 모니터링 조회, T3는 같은 세션의 Jira mock 검색을 호출했습니다. 결과와 캡처만 로컬 ZIP에 보관하고 원본 파일은 포함하거나 Git에 추가하지 않았습니다.
 

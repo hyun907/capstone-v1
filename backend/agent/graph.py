@@ -3,7 +3,6 @@
 from collections.abc import Sequence
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import ToolErrorMiddleware
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
@@ -29,7 +28,6 @@ T3. 기존 incident 기록은 search_jira_tickets로 검색하세요.
 Jira 검색 결과도 응답에 표시된 mock 여부를 확인하고, 확인된 사실과 추정을 나눠 설명하세요.
 모니터링 status가 unknown이면 CPU·메모리 0%는 측정값이 아닌 기본값입니다.
 시스템의 실재 여부를 단정하지 말고 모니터링 데이터에서 찾지 못했다고 설명하세요.
-도구가 실패하면 실패 사실을 알리고 확인하지 못한 정보를 지어내지 마세요.
 Jira 티켓 생성은 이 채팅에서 사용할 수 없습니다. 생성 요청에는 별도의 사용자 승인 절차가 필요하다고 안내하세요.
 """
 
@@ -66,12 +64,5 @@ async def build_agent(
         tools=read_only_tools,
         system_prompt=SYSTEM_PROMPT,
         checkpointer=MemorySaver(),
-        middleware=[
-            ToolErrorMiddleware(
-                on_error=lambda _error, _request: (
-                    "조회 도구 실행에 실패했습니다. 잠시 후 다시 시도하거나 연결 설정을 확인하세요."
-                )
-            )
-        ],
     )
     return agent.with_config({"recursion_limit": recursion_limit})
