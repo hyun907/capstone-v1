@@ -1,6 +1,6 @@
 # AI Agent 개인 실습
 
-AI Agent 서비스를 단계별로 직접 구현하고 검증하는 개인 실습 저장소입니다. 현재는 MCP 서버의 응답 스키마, 런북 Resource, 모니터링 상태 조회 Tool을 구현한 상태입니다.
+AI Agent 서비스를 단계별로 직접 구현하고 검증하는 개인 실습 저장소입니다. 현재 MCP 서버에서 Tool 4개, Resource 1개, Prompt 1개를 제공합니다.
 
 ## 진행 범위
 
@@ -20,7 +20,16 @@ AI Agent 서비스를 단계별로 직접 구현하고 검증하는 개인 실�
 
 ## 로컬 환경
 
-Python 3.11과 `uv`를 사용합니다. 프로젝트 루트에서 `uv sync --locked`로 MCP 서버 의존성을 설치하고, `uv run python -c "from fastmcp import FastMCP; from pydantic import BaseModel"`로 import를 확인할 수 있습니다. MCP 서버 실행 방법은 실행 구문을 구현한 뒤 추가합니다. API 키와 연결 정보는 `.env` 같은 추적 제외 파일에 보관합니다.
+Python 3.11과 `uv`를 사용합니다. 프로젝트 루트에서 `uv sync --locked`로 MCP 서버 의존성을 설치합니다. API 키와 연결 정보는 `.env` 같은 추적 제외 파일에 보관합니다.
+
+서버는 stdio로 실행합니다. MCP Inspector에서는 아래 두 번째 명령을 사용하고, 터미널에 표시되는 로컬 주소에서 Connect를 누릅니다.
+
+```bash
+uv run python mcp-server/server.py
+npx @modelcontextprotocol/inspector@v1-latest uv run python mcp-server/server.py
+```
+
+Inspector에서 `get_monitoring_status`, `search_operations_manual`, `search_jira_tickets`, `create_jira_ticket` Tool과 `runbook://incident-response/{incident_type}` Resource Template, `incident_analysis_prompt` Prompt를 확인할 수 있습니다. Jira 검색·생성은 실제 API 대신 mock 결과를 반환합니다.
 
 ## 실습 데이터
 
