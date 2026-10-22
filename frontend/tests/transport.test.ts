@@ -89,3 +89,31 @@ test("done 없이 끊어진 응답은 정상 종료로 처리하지 않는다", 
     globalThis.fetch = originalFetch;
   }
 });
+
+test("Backend 오류 이벤트의 사용자 안내를 표시한다", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => mockSse([
+    frame("error", {
+      type: "error",
+      code: "MODEL_RATE_LIMIT",
+      message: "OpenAI 요청 한도에 도달했습니다.",
+    }),
+  ]);
+
+  try {
+    const transport = new BackendChatTransport("http://localhost:8000");
+    const stream = await transport.sendMessages({
+      chatId: "thread-test",
+      trigger: "submit-message",
+      messageId: undefined,
+      messages: [{ id: "user-1", role: "user", parts: [{ type: "text", text: "질문" }] }],
+      abortSignal: undefined,
+    });
+    const reader = stream.getReader();
+    await assert.rejects(async () => {
+      while (!(await reader.read()).done) { /* consume */ }
+    }, /OpenAI 요청 한도에 도달했습니다/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

@@ -41,6 +41,14 @@ function parseEvent(frame: string): StreamEvent | null {
         return { type: "done", thread_id: value.thread_id };
       }
       break;
+    case "error":
+      if (
+        (value.code === "MODEL_RATE_LIMIT" || value.code === "STREAM_FAILED") &&
+        typeof value.message === "string"
+      ) {
+        return { type: "error", code: value.code, message: value.message };
+      }
+      break;
   }
   throw new Error("알 수 없거나 잘못된 스트림 이벤트입니다.");
 }
@@ -135,6 +143,8 @@ export class BackendChatTransport implements ChatTransport<AppMessage> {
               controller.enqueue({ type: "finish" });
               finished = true;
               break;
+            case "error":
+              throw new Error(event.message);
           }
         };
 

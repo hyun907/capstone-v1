@@ -29,3 +29,9 @@ class ToolCallEndEvent(StreamEvent):
 class DoneEvent(StreamEvent):
     type: Literal["done"] = "done"
     thread_id: str
+
+
+class ErrorEvent(StreamEvent):
+    type: Literal["error"] = "error"
+    code: Literal["MODEL_RATE_LIMIT", "STREAM_FAILED"]
+    message: str

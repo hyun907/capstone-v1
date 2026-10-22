@@ -1,6 +1,6 @@
 # 스트리밍 채팅 화면
 
-Next.js App Router와 AI SDK `useChat`을 사용해 단일 Agent의 진행 상황을 표시합니다. 이 화면은 `POST /chat/stream`의 SSE 네 가지 이벤트를 직접 읽는 [Custom Transport](lib/transport.ts)를 사용합니다.
+Next.js App Router와 AI SDK `useChat`을 사용해 단일 Agent의 진행 상황을 표시합니다. 이 화면은 `POST /chat/stream`의 정상 진행 이벤트 네 가지와 오류 이벤트를 직접 읽는 [Custom Transport](lib/transport.ts)를 사용합니다.
 
 ## 로컬 실행
 

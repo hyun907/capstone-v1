@@ -10,9 +10,11 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
+from openai import RateLimitError
 
 from backend.agent.graph import build_agent
 from backend.schemas.chat import ChatRequest, ChatResponse
+from backend.schemas.stream import ErrorEvent
 from backend.streaming.event_converter import convert_langgraph_events
 from backend.streaming.sse_formatter import format_sse
 
@@ -95,9 +97,17 @@ async def chat_stream(payload: ChatRequest, request: Request) -> StreamingRespon
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            # 응답 헤더가 이미 전송된 뒤라 HTTP 상태를 바꿀 수 없습니다.
-            # done이 없으면 클라이언트가 중단된 스트림으로 처리합니다.
             logger.error("스트림 생성 실패: %s", type(exc).__name__)
+            if isinstance(exc, RateLimitError):
+                yield format_sse(ErrorEvent(
+                    code="MODEL_RATE_LIMIT",
+                    message="OpenAI 요청 한도에 도달했습니다. 잠시 후 다시 시도하고, 계속되면 API 사용량을 확인해 주세요.",
+                ))
+            else:
+                yield format_sse(ErrorEvent(
+                    code="STREAM_FAILED",
+                    message="응답 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+                ))
 
     return StreamingResponse(
         event_generator(),

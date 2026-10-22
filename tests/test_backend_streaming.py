@@ -4,8 +4,10 @@ import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
+import httpx
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+from openai import RateLimitError
 
 from backend.agent.graph import build_agent
 from backend.main import app
@@ -82,6 +84,29 @@ class EventConverterTests(unittest.IsolatedAsyncioTestCase):
 
 
 class StreamingEndpointTests(unittest.IsolatedAsyncioTestCase):
+    async def test_stream_reports_model_limit_without_leaking_exception(self) -> None:
+        class FailingAgent:
+            async def astream(self, *_args, **_kwargs):
+                response = httpx.Response(
+                    429,
+                    request=httpx.Request("POST", "https://api.openai.com/v1/chat/completions"),
+                )
+                raise RateLimitError("private upstream detail", response=response, body=None)
+                yield  # pragma: no cover
+
+        with patch("backend.main.build_agent", new=AsyncMock(return_value=FailingAgent())):
+            with TestClient(app) as client:
+                response = client.post(
+                    "/chat/stream", json={"message": "질문", "thread_id": "limited-thread"}
+                )
+
+        self.assertEqual(response.status_code, 200)
+        events = parse_events(response.text)
+        self.assertEqual([event["type"] for event in events], ["error"])
+        self.assertEqual(events[0]["code"], "MODEL_RATE_LIMIT")
+        self.assertIn("OpenAI 요청 한도", events[0]["message"])
+        self.assertNotIn("private upstream detail", response.text)
+
     async def test_streams_tool_progress_and_reuses_thread(self) -> None:
         agent = await build_agent(model=SyntheticChatModel(), tools=SYNTHETIC_TOOLS)
         with patch("backend.main.build_agent", new=AsyncMock(return_value=agent)):
