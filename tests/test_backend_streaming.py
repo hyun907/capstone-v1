@@ -84,6 +84,13 @@ class EventConverterTests(unittest.IsolatedAsyncioTestCase):
 
 
 class StreamingEndpointTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        supervisor_patcher = patch(
+            "backend.main.build_supervisor_graph", new=AsyncMock(return_value=object())
+        )
+        supervisor_patcher.start()
+        self.addCleanup(supervisor_patcher.stop)
+
     async def test_stream_reports_model_limit_without_leaking_exception(self) -> None:
         class FailingAgent:
             def __init__(self, body: dict | None) -> None:

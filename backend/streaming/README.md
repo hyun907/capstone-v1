@@ -4,4 +4,4 @@
 
 `convert_supervisor_events()`는 Supervisor의 계획·Task 상태와 중첩 Sub-Agent 이벤트를 변환합니다. 호출할 때 그래프의 `astream(..., stream_mode=["messages", "updates"], subgraphs=True)`가 필요합니다. `start_task` 업데이트에서 Task ID를 얻고, `execute_task`의 중첩 namespace에 연결해 토큰과 도구 호출을 해당 Task로 표시합니다. 최종 답변은 `finalize` 업데이트에서 한 번만 보내며, 정상 종료에만 `done`을 보냅니다.
 
-현재 HTTP 경로에는 단일 Agent 변환기만 연결되어 있습니다. Supervisor 경로 연결은 다음 이슈에서 진행합니다.
+`/chat/stream`은 단일 Agent 변환기를, `/chat/supervisor/stream`은 Supervisor 변환기를 사용합니다. 화면의 Supervisor 카드 연결은 후속 단계입니다.

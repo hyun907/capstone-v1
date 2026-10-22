@@ -50,6 +50,13 @@ class SyntheticAgent:
 
 
 class BackendMainTests(unittest.TestCase):
+    def setUp(self) -> None:
+        supervisor_patcher = patch(
+            "backend.main.build_supervisor_graph", new=AsyncMock(return_value=object())
+        )
+        supervisor_patcher.start()
+        self.addCleanup(supervisor_patcher.stop)
+
     def test_health_new_and_reused_thread_only_returns_current_calls(self) -> None:
         agent = SyntheticAgent()
         with patch("backend.main.build_agent", new=AsyncMock(return_value=agent)) as builder:

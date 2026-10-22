@@ -1,6 +1,6 @@
 # Agent 읽기
 
-Agent는 질문에 답할 때 필요한 조회 도구를 LLM이 선택하도록 구성한 코드입니다. 현재 서비스에는 단일 Agent가 연결되어 있습니다. [`supervisor_graph.py`](supervisor_graph.py)에는 Supervisor의 계획과 Research·Writing 실행 흐름이 있지만, HTTP Endpoint와 화면은 아직 연결되지 않았습니다.
+Agent는 질문에 답할 때 필요한 조회 도구를 LLM이 선택하도록 구성한 코드입니다. 단일 Agent는 `/chat`과 `/chat/stream`에 연결되어 있습니다. [`supervisor_graph.py`](supervisor_graph.py)의 계획과 Research·Writing 실행 흐름은 `/chat/supervisor/stream`에 연결되어 있으며, 화면의 Supervisor 카드는 아직 없습니다.
 
 ## `graph.py`는 무엇을 하나요?
 
