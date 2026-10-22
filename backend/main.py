@@ -1,14 +1,24 @@
 """ICT 운영 지원 Backend의 HTTP 진입점."""
 
+import asyncio
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
+from openai import RateLimitError
 
 from backend.agent.graph import build_agent
 from backend.schemas.chat import ChatRequest, ChatResponse
+from backend.schemas.stream import ErrorEvent
+from backend.streaming.event_converter import convert_langgraph_events
+from backend.streaming.sse_formatter import format_sse
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -22,6 +32,12 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_methods=["POST"],
+    allow_headers=["content-type"],
+)
 
 
 @app.get("/health")
@@ -61,4 +77,46 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
         thread_id=thread_id,
         message=current_ai_messages[-1].text.strip(),
         tool_calls=tool_calls,
+    )
+
+
+@app.post("/chat/stream")
+async def chat_stream(payload: ChatRequest, request: Request) -> StreamingResponse:
+    """Agent 진행 상황을 SSE로 차례로 전달합니다."""
+    thread_id = payload.thread_id or str(uuid4())
+
+    async def event_generator() -> AsyncIterator[str]:
+        graph_stream = request.app.state.agent.astream(
+            {"messages": [{"role": "user", "content": payload.message}]},
+            {"configurable": {"thread_id": thread_id}},
+            stream_mode=["messages", "updates"],
+        )
+        try:
+            async for event in convert_langgraph_events(graph_stream, thread_id):
+                yield format_sse(event)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("스트림 생성 실패: %s", type(exc).__name__)
+            if isinstance(exc, RateLimitError):
+                if exc.code == "credit_balance_exhausted":
+                    yield format_sse(ErrorEvent(
+                        code="API_CREDIT_EXHAUSTED",
+                        message="OpenAI API 크레딧이 소진되었습니다. API 결제 설정에서 잔액을 확인해 주세요.",
+                    ))
+                else:
+                    yield format_sse(ErrorEvent(
+                        code="MODEL_RATE_LIMIT",
+                        message="OpenAI 요청 한도에 도달했습니다. 잠시 후 다시 시도하고, 계속되면 API 사용량을 확인해 주세요.",
+                    ))
+            else:
+                yield format_sse(ErrorEvent(
+                    code="STREAM_FAILED",
+                    message="응답 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+                ))
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

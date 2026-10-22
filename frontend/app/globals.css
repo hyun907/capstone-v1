@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body { margin: 0; background: #f3f5f7; color: #18232f; font-family: Arial, Helvetica, sans-serif; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+.loading-page { min-height: 100vh; display: grid; place-items: center; color: #526373; }
+.shell { width: min(100%, 920px); min-height: 100vh; margin: auto; display: flex; flex-direction: column; background: #fff; box-shadow: 0 0 40px #1726380b; }
+.header { display: flex; align-items: start; justify-content: space-between; gap: 20px; padding: 28px 32px 24px; border-bottom: 1px solid #e8edf1; }
+.eyebrow { color: #2f7584; font-size: 11px; font-weight: 700; letter-spacing: .14em; }
+h1 { margin: 8px 0 6px; font-size: 25px; line-height: 1.25; letter-spacing: -.03em; }
+.header p { margin: 0; color: #607080; font-size: 14px; }
+.header-actions { display: flex; flex: none; align-items: flex-end; flex-direction: column; gap: 10px; }
+.new-thread { flex: none; border: 1px solid #cbd7dc; border-radius: 9px; background: #fff; color: #245766; padding: 9px 13px; font-size: 13px; font-weight: 600; }
+.new-thread:hover { background: #f0f7f8; }
+.thread-bar { display: flex; align-items: center; gap: 8px; color: #61707b; font-size: 12px; }
+.thread-indicator { width: 7px; height: 7px; border-radius: 50%; background: #39a185; }
+.thread-bar code { color: #254d58; font-weight: 700; }
+.conversation { flex: 1; min-height: 400px; padding: 30px 32px 40px; overflow-y: auto; }
+.empty-state { display: flex; min-height: 360px; align-items: center; justify-content: center; flex-direction: column; text-align: center; color: #61707c; }
+.empty-mark { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: #e5f4f3; color: #247a78; font-size: 28px; }
+.empty-state h2 { margin: 20px 0 5px; color: #1b303a; font-size: 20px; }
+.empty-state p { margin: 0; font-size: 14px; }
+.message { max-width: 84%; margin-bottom: 25px; }
+.message-user { margin-left: auto; }
+.message-label { color: #687986; font-size: 12px; font-weight: 700; margin: 0 0 7px 3px; }
+.message-user .message-label { text-align: right; margin-right: 3px; }
+.message-body { border-radius: 14px; padding: 14px 16px; background: #f2f6f8; }
+.message-user .message-body { background: #dff0ed; }
+.message-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.7; }
+.message-text + .message-text { margin-top: 12px; }
+.tool-card { margin: 2px 0 12px; border: 1px solid #d6e4e6; border-radius: 9px; background: #fff; padding: 11px 13px; font-size: 12px; }
+.tool-heading { display: flex; align-items: center; gap: 7px; color: #3e6571; font-weight: 700; flex-wrap: wrap; }
+.tool-heading code { margin-left: auto; color: #254653; font-weight: 500; }
+.tool-dot { width: 7px; height: 7px; border-radius: 50%; }
+.tool-dot.pending { background: #ed9d41; animation: pulse 1.2s ease-in-out infinite; }
+.tool-dot.completed { background: #39a185; }
+.tool-card details { margin-top: 8px; color: #62737c; }
+.tool-card summary { cursor: pointer; }
+.tool-card p { margin: 9px 0 3px; font-weight: 700; }
+.tool-card pre { margin: 0; padding: 8px; background: #f6f8f9; border-radius: 5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.progress-note { color: #607786; font-size: 13px; }
+.error-note { padding: 11px 13px; border-radius: 8px; background: #fff3f0; color: #9f3e2c; font-size: 13px; }
+.footer { border-top: 1px solid #e8edf1; padding: 18px 32px 22px; background: #fff; }
+.chat-input { display: flex; gap: 9px; }
+.chat-input input { min-width: 0; flex: 1; border: 1px solid #cbd7dc; border-radius: 9px; padding: 12px 14px; outline: none; }
+.chat-input input:focus { border-color: #388b90; box-shadow: 0 0 0 3px #388b9022; }
+.chat-input button { border: 0; border-radius: 9px; background: #247b80; color: #fff; padding: 0 20px; font-weight: 700; }
+.chat-input button:disabled { background: #acb9bd; cursor: default; }
+.footer p { margin: 9px 0 0; color: #8a99a0; font-size: 11px; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .tool-dot.pending { animation: none; } }
+@media (max-width: 600px) { .header, .conversation, .footer { padding-left: 18px; padding-right: 18px; } .header { align-items: center; } h1 { font-size: 20px; } .header p { display: none; } .message { max-width: 94%; } }
