@@ -4,6 +4,12 @@ test("도구 상태, 토큰, 대화 ID와 새 대화를 화면에 반영한다",
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "ICT 운영 지원 Agent" })).toBeVisible();
   const firstId = await page.locator(".thread-bar code").textContent();
+  const header = await page.locator(".header").boundingBox();
+  const thread = await page.locator(".thread-bar").boundingBox();
+  expect(header).not.toBeNull();
+  expect(thread).not.toBeNull();
+  expect(thread!.x).toBeGreaterThan(header!.x + header!.width / 2);
+  expect(thread!.y).toBeLessThan(header!.y + header!.height);
 
   await page.getByLabel("메시지").fill("데이터베이스 다운 절차");
   await page.getByRole("button", { name: "전송" }).click();
@@ -34,7 +40,7 @@ test("스트림이 중간에 실패하면 화면에 오류를 표시한다", asy
   await page.goto("/");
   await page.getByLabel("메시지").fill("오류 확인");
   await page.getByRole("button", { name: "전송" }).click();
-  await expect(page.locator(".error-note")).toContainText("완료 신호 없이 끊어졌습니다");
+  await expect(page.locator(".error-note")).toContainText("응답 생성 중 오류가 발생했습니다");
   await expect(page.getByLabel("메시지")).toBeEnabled();
 });
 
