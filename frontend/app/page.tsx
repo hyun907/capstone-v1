@@ -7,12 +7,17 @@ import { ChatInput } from "@/components/ChatInput";
 import { ChatMessage } from "@/components/ChatMessage";
 import { getOrCreateThreadId, startNewThread } from "@/lib/thread";
 import { BackendChatTransport } from "@/lib/transport";
-import type { AppMessage } from "@/lib/types";
+import type { AppMessage, ChatMode } from "@/lib/types";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
-function ChatSession({ threadId, onNewThread }: { threadId: string; onNewThread: () => void }) {
-  const transport = useMemo(() => new BackendChatTransport(BACKEND_URL), []);
+function ChatSession({ mode, threadId, onNewThread, onChangeMode }: {
+  mode: ChatMode;
+  threadId: string;
+  onNewThread: () => void;
+  onChangeMode: (mode: ChatMode) => void;
+}) {
+  const transport = useMemo(() => new BackendChatTransport(BACKEND_URL, mode), [mode]);
   const { messages, sendMessage, status, error, stop } = useChat<AppMessage>({
     id: threadId,
     transport,
@@ -29,6 +34,12 @@ function ChatSession({ threadId, onNewThread }: { threadId: string; onNewThread:
     onNewThread();
   }
 
+  function handleModeChange(nextMode: ChatMode) {
+    if (nextMode === mode) return;
+    stop();
+    onChangeMode(nextMode);
+  }
+
   return (
     <div className="shell">
       <header className="header">
@@ -36,6 +47,10 @@ function ChatSession({ threadId, onNewThread }: { threadId: string; onNewThread:
           <span className="eyebrow">CAPSTONE · STREAMING</span>
           <h1>ICT 운영 지원 Agent</h1>
           <p>도구 사용과 답변이 진행되는 순서대로 표시됩니다.</p>
+          <div className="mode-switch" role="group" aria-label="Agent 모드">
+            <button type="button" aria-pressed={mode === "single"} onClick={() => handleModeChange("single")}>Single Agent</button>
+            <button type="button" aria-pressed={mode === "multi"} onClick={() => handleModeChange("multi")}>Multi-Agent</button>
+          </div>
         </div>
         <div className="header-actions">
           <div className="thread-bar">
@@ -71,12 +86,22 @@ function ChatSession({ threadId, onNewThread }: { threadId: string; onNewThread:
 }
 
 export default function Home() {
+  const [mode, setMode] = useState<ChatMode>("single");
   const [threadId, setThreadId] = useState<string | null>(null);
 
   useEffect(() => {
-    setThreadId(getOrCreateThreadId());
+    setThreadId(getOrCreateThreadId("single"));
   }, []);
 
   if (!threadId) return <div className="loading-page">대화를 준비하는 중…</div>;
-  return <ChatSession key={threadId} threadId={threadId} onNewThread={() => setThreadId(startNewThread())} />;
+  return <ChatSession
+    key={`${mode}:${threadId}`}
+    mode={mode}
+    threadId={threadId}
+    onNewThread={() => setThreadId(startNewThread(mode))}
+    onChangeMode={(nextMode) => {
+      setMode(nextMode);
+      setThreadId(getOrCreateThreadId(nextMode));
+    }}
+  />;
 }
