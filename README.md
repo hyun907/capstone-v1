@@ -104,6 +104,18 @@ uv run --locked --extra backend uvicorn backend.main:app
 uv run --locked --extra backend python -m unittest discover -s tests -p 'test_backend_main.py' -v
 ```
 
+### 스트리밍 채팅
+
+`POST /chat/stream`은 단일 Agent의 진행 상황을 SSE로 보냅니다. `tool_call_start`, `tool_call_end`, `token`, `done` 이벤트가 순서대로 도착하며, 기존 `POST /chat`도 그대로 사용할 수 있습니다. 요청은 같은 `ChatRequest` 형식을 사용합니다.
+
+```bash
+curl -N -X POST http://localhost:8000/chat/stream \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"상태를 확인해 주세요"}'
+```
+
+화면은 [`frontend/README.md`](frontend/README.md)에 따라 실행합니다. Next.js가 대화 ID를 브라우저에 보관하고, AI SDK의 Custom Transport가 Backend SSE를 읽어 도구 상태와 답변을 점진적으로 표시합니다. 외부 모델 없이 실행하는 검증은 `tests/test_backend_streaming.py`와 `frontend`의 테스트를 참고하세요.
+
 ### FastAPI 통합 검증
 
 초기 검증에서는 별도 작업 트리의 Git 추적 제외 `mcp-server/data/`에 합성 runbook과 모니터링 데이터를 두고, 로컬에서 H·T1·T2·T3·E1·E2를 `curl`로 확인했습니다. 이때 OpenAI 호출에는 합성 데이터만 사용했습니다. T2와 T3는 같은 `thread_id`를 사용했고, T3의 Jira 검색 인자에 `auth-service`가 기록됐습니다.

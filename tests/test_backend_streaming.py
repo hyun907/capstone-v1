@@ -109,3 +109,16 @@ class StreamingEndpointTests(unittest.IsolatedAsyncioTestCase):
 
                 invalid = client.post("/chat/stream", json={"message": ""})
                 self.assertEqual(invalid.status_code, 422)
+
+                preflight = client.options(
+                    "/chat/stream",
+                    headers={
+                        "Origin": "http://localhost:3000",
+                        "Access-Control-Request-Method": "POST",
+                        "Access-Control-Request-Headers": "content-type",
+                    },
+                )
+                self.assertEqual(preflight.status_code, 200)
+                self.assertEqual(
+                    preflight.headers["access-control-allow-origin"], "http://localhost:3000"
+                )
