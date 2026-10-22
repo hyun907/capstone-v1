@@ -1,6 +1,6 @@
 # 스트리밍 채팅 화면
 
-Next.js App Router와 AI SDK `useChat`을 사용해 단일 Agent의 진행 상황을 표시합니다. [Custom Transport](lib/transport.ts)는 `POST /chat/stream`과 `POST /chat/supervisor/stream`의 SSE를 읽을 수 있으며, 현재 화면은 단일 Agent 모드에 연결되어 있습니다. Supervisor 카드와 모드 선택은 다음 단계에서 추가합니다.
+Next.js App Router와 AI SDK `useChat`을 사용해 단일 Agent와 Supervisor의 진행 상황을 표시합니다. [Custom Transport](lib/transport.ts)는 `POST /chat/stream`과 `POST /chat/supervisor/stream`의 SSE를 읽습니다. 화면 상단에서 모드를 바꾸면 각 모드의 대화 ID와 메시지 화면을 따로 사용합니다.
 
 ## 로컬 실행
 
@@ -25,7 +25,7 @@ npm run dev
 1. [`app/page.tsx`](app/page.tsx)가 `useChat`을 만들고 화면의 메시지·오류·새 대화 상태를 관리합니다.
 2. [`lib/thread.ts`](lib/thread.ts)가 브라우저 `localStorage`에 단일·Supervisor 모드별 대화 ID를 따로 보관합니다. 새로고침하면 ID는 유지되지만 화면의 메시지는 다시 시작합니다.
 3. [`lib/transport.ts`](lib/transport.ts)가 Backend SSE를 읽어 AI SDK 메시지 조각으로 바꿉니다. 단일 Agent 도구 상태는 `data-toolProgress`, Supervisor 진행은 `data-supervisorProgress`로 전달합니다.
-4. [`components/`](components/)가 메시지, 입력창, 도구 박스를 그립니다. 이벤트 필드는 [`lib/types.ts`](lib/types.ts)와 Backend의 [`stream.py`](../backend/schemas/stream.py)에 대응합니다.
+4. [`components/`](components/)가 메시지, 입력창, 도구 박스, Supervisor의 Plan·Task 카드를 그립니다. 이벤트 필드는 [`lib/types.ts`](lib/types.ts)와 Backend의 [`stream.py`](../backend/schemas/stream.py)에 대응합니다.
 
 Backend의 대화 기록은 `MemorySaver`에 있으므로 Backend를 재시작하면 이전 문맥이 사라집니다. 브라우저의 ID가 남아 있어도 이전 대화 내용을 복원할 수는 없습니다.
 

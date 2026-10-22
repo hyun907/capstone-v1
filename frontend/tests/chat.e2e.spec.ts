@@ -53,3 +53,49 @@ test("새 대화는 진행 중인 스트림을 중단하고 화면을 비운다"
   await expect(page.getByText("무엇을 확인할까요?")).toBeVisible();
   await expect(page.getByText("현재 질문: 긴 응답 확인")).not.toBeVisible();
 });
+
+test("Multi-Agent 모드에서 계획과 Task 상태가 순서대로 보인다", async ({ page }) => {
+  await page.goto("/");
+  const singleId = await page.locator(".thread-bar code").textContent();
+  await page.getByRole("button", { name: "Multi-Agent" }).click();
+  const multiId = await page.locator(".thread-bar code").textContent();
+  expect(multiId).not.toBe(singleId);
+  await page.getByLabel("메시지").fill("가상 DB 절차");
+  await page.getByRole("button", { name: "전송" }).click();
+
+  await expect(page.getByRole("region", { name: "Supervisor 계획" })).toContainText("매뉴얼을 확인하고 답변합니다.");
+  const tasks = page.locator(".task-card");
+  await expect(tasks).toHaveCount(2);
+  await expect(tasks.first()).toHaveClass(/task-in_progress/);
+  await expect(tasks.first().locator(".task-tool summary")).toContainText("도구 실행 중");
+  await expect(tasks.first().locator(".task-tool summary")).toContainText("도구 완료");
+  await expect(tasks.first()).toHaveClass(/task-completed/);
+  await expect(tasks.nth(1)).toHaveClass(/task-in_progress/);
+  await expect(tasks.nth(1).getByLabel("task_2 진행 내용")).toContainText("답변 작성 중");
+  await expect(tasks.nth(1)).toHaveClass(/task-completed/);
+  await expect(page.locator(".final-answer")).toContainText("합성 Supervisor 답변");
+  await expect(page.getByLabel("메시지")).toBeEnabled();
+
+  await page.getByRole("button", { name: "Single Agent" }).click();
+  await expect(page.locator(".thread-bar code")).toHaveText(singleId ?? "");
+  await expect(page.getByText("무엇을 확인할까요?")).toBeVisible();
+  await page.getByLabel("메시지").fill("단일 질문");
+  await page.getByRole("button", { name: "전송" }).click();
+  await expect(page.getByText(/합성 응답. 이전 질문: 없음/)).toBeVisible();
+  await page.getByRole("button", { name: "Multi-Agent" }).click();
+  await expect(page.locator(".thread-bar code")).toHaveText(multiId ?? "");
+  await expect(page.getByText("무엇을 확인할까요?")).toBeVisible();
+});
+
+test("Supervisor 오류와 새 대화가 화면에 반영된다", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Multi-Agent" }).click();
+  await page.getByLabel("메시지").fill("오류 확인");
+  await page.getByRole("button", { name: "전송" }).click();
+  await expect(page.locator(".error-note")).toContainText("응답 생성 중 오류가 발생했습니다");
+  await expect(page.getByLabel("메시지")).toBeEnabled();
+  const previousId = await page.locator(".thread-bar code").textContent();
+  await page.getByRole("button", { name: "새 대화" }).click();
+  await expect(page.locator(".thread-bar code")).not.toHaveText(previousId ?? "");
+  await expect(page.getByText("무엇을 확인할까요?")).toBeVisible();
+});
