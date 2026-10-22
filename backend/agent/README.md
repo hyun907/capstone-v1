@@ -1,6 +1,6 @@
 # Agent 읽기
 
-Agent는 질문에 답할 때 필요한 조회 도구를 LLM이 선택하도록 구성한 코드입니다. **현재는 단일 Agent**이며, Supervisor나 직접 작성한 `StateGraph` 노드는 없습니다.
+Agent는 질문에 답할 때 필요한 조회 도구를 LLM이 선택하도록 구성한 코드입니다. 현재 서비스에는 단일 Agent가 연결되어 있습니다. [`supervisor_graph.py`](supervisor_graph.py)에는 다음 단계에 사용할 계획·Task 분해 노드만 있으며, Research·Writing 실행과 HTTP Endpoint는 아직 연결되지 않았습니다.
 
 ## `graph.py`는 무엇을 하나요?
 
@@ -19,3 +19,9 @@ Agent는 질문에 답할 때 필요한 조회 도구를 LLM이 선택하도록 
 `MemorySaver`는 `configurable.thread_id`를 기준으로 대화를 구분합니다. 같은 서버 프로세스에서 같은 ID를 다시 보내야 이전 대화를 이어 볼 수 있습니다. PostgreSQL 같은 영구 저장은 아직 없습니다.
 
 도구 오류는 현재 Agent에서 별도 안내 문구로 바꾸지 않고 호출자에게 전파합니다. 관련 동작은 [`test_backend_agent_graph.py`](../../tests/test_backend_agent_graph.py)에서 합성 모델과 도구로 검증합니다.
+
+## Supervisor 계획 단계
+
+`build_supervisor_graph()`는 지금은 `시작 → planning → 종료`인 작은 LangGraph입니다. 마지막 사용자 메시지와 이전 대화를 보고 계획과 최대 6개의 Task를 만듭니다. Research Task는 앞에 두고 Writing Task 하나로 끝나야 합니다. 출력은 Pydantic으로 검증하며 잘못된 계획은 저장하거나 실행하지 않습니다.
+
+같은 `thread_id`를 다시 쓰면 메시지 이력은 이어지지만, 매 사용자 턴마다 계획·Task 목록·현재 위치를 새로 작성합니다. 실제 모델 호출 없이 확인하는 테스트는 [`test_backend_supervisor_planning.py`](../../tests/test_backend_supervisor_planning.py)에 있습니다.
