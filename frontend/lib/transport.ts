@@ -1,11 +1,24 @@
 import type { ChatTransport, UIMessageChunk } from "ai";
 
-import type { AppMessage, StreamEvent, ToolProgress } from "./types";
+import type { AppMessage, ChatMode, StreamEvent, SupervisorProgress, SupervisorTask, ToolProgress } from "./types";
 
 type SendOptions = Parameters<ChatTransport<AppMessage>["sendMessages"]>[0];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isAgent(value: unknown): value is "research" | "writing" {
+  return value === "research" || value === "writing";
+}
+
+function isSupervisorTask(value: unknown): value is SupervisorTask {
+  return isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.description === "string" &&
+    isAgent(value.agent) &&
+    (value.status === "pending" || value.status === "in_progress" || value.status === "completed") &&
+    (typeof value.result === "string" || value.result === null);
 }
 
 function parseEvent(frame: string): StreamEvent | null {
@@ -51,6 +64,38 @@ function parseEvent(frame: string): StreamEvent | null {
         return { type: "error", code: value.code, message: value.message };
       }
       break;
+    case "plan_created":
+      if (typeof value.plan === "string") return { type: "plan_created", plan: value.plan };
+      break;
+    case "task_list_created":
+      if (Array.isArray(value.tasks) && value.tasks.every(isSupervisorTask)) {
+        return { type: "task_list_created", tasks: value.tasks };
+      }
+      break;
+    case "task_started":
+      if (typeof value.task_id === "string" && isAgent(value.agent_name)) {
+        return { type: "task_started", task_id: value.task_id, agent_name: value.agent_name };
+      }
+      break;
+    case "task_completed":
+      if (typeof value.task_id === "string" &&
+        (typeof value.result_preview === "string" || value.result_preview === null)) {
+        return { type: "task_completed", task_id: value.task_id, result_preview: value.result_preview };
+      }
+      break;
+    case "sub_agent_token":
+      if (typeof value.task_id === "string" && typeof value.content === "string") {
+        return { type: "sub_agent_token", task_id: value.task_id, content: value.content };
+      }
+      break;
+    case "sub_agent_tool_call":
+      if (typeof value.task_id === "string" && typeof value.tool_name === "string" &&
+        isRecord(value.args) && (value.status === "start" || value.status === "end") &&
+        (typeof value.result === "string" || value.result === null)) {
+        return { type: "sub_agent_tool_call", task_id: value.task_id,
+          tool_name: value.tool_name, args: value.args, status: value.status, result: value.result };
+      }
+      break;
   }
   throw new Error("알 수 없거나 잘못된 스트림 이벤트입니다.");
 }
@@ -65,9 +110,11 @@ function latestUserText(messages: AppMessage[]): string {
 
 export class BackendChatTransport implements ChatTransport<AppMessage> {
   private readonly backendUrl: string;
+  private readonly mode: ChatMode;
 
-  constructor(backendUrl: string) {
+  constructor(backendUrl: string, mode: ChatMode = "single") {
     this.backendUrl = backendUrl.replace(/\/$/, "");
+    this.mode = mode;
   }
 
   async sendMessages({ chatId, messages, abortSignal }: SendOptions): Promise<ReadableStream<UIMessageChunk>> {
@@ -76,7 +123,8 @@ export class BackendChatTransport implements ChatTransport<AppMessage> {
 
     let response: Response;
     try {
-      response = await fetch(`${this.backendUrl}/chat/stream`, {
+      const endpoint = this.mode === "multi" ? "/chat/supervisor/stream" : "/chat/stream";
+      response = await fetch(`${this.backendUrl}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message, thread_id: chatId }),
@@ -97,6 +145,9 @@ export class BackendChatTransport implements ChatTransport<AppMessage> {
     return new ReadableStream<UIMessageChunk>({
       async start(controller) {
         const pendingTools: { id: string; value: ToolProgress }[] = [];
+        const taskTokenIds = new Map<string, string>();
+        const taskTokens = new Map<string, string>();
+        const pendingSupervisorTools: { id: string; taskId: string; toolName: string }[] = [];
         const textId = crypto.randomUUID();
         let textStarted = false;
         let finished = false;
@@ -137,6 +188,36 @@ export class BackendChatTransport implements ChatTransport<AppMessage> {
               };
               if (pending) pending.value = value;
               controller.enqueue({ type: "data-toolProgress", id, data: value });
+              break;
+            }
+            case "plan_created":
+            case "task_list_created":
+            case "task_started":
+            case "task_completed":
+              controller.enqueue({ type: "data-supervisorProgress", id: crypto.randomUUID(), data: event });
+              break;
+            case "sub_agent_token": {
+              const id = taskTokenIds.get(event.task_id) ?? crypto.randomUUID();
+              taskTokenIds.set(event.task_id, id);
+              const content = (taskTokens.get(event.task_id) ?? "") + event.content;
+              taskTokens.set(event.task_id, content);
+              const progress: SupervisorProgress = { ...event, content };
+              controller.enqueue({ type: "data-supervisorProgress", id, data: progress });
+              break;
+            }
+            case "sub_agent_tool_call": {
+              if (event.status === "start") {
+                const id = crypto.randomUUID();
+                pendingSupervisorTools.push({ id, taskId: event.task_id, toolName: event.tool_name });
+                controller.enqueue({ type: "data-supervisorProgress", id, data: event });
+              } else {
+                const pending = [...pendingSupervisorTools].reverse().find(
+                  (item) => item.taskId === event.task_id && item.toolName === event.tool_name,
+                );
+                if (pending) pendingSupervisorTools.splice(pendingSupervisorTools.indexOf(pending), 1);
+                controller.enqueue({ type: "data-supervisorProgress",
+                  id: pending?.id ?? crypto.randomUUID(), data: event });
+              }
               break;
             }
             case "done":

@@ -117,3 +117,77 @@ test("API 크레딧 소진 오류의 사용자 안내를 표시한다", async ()
     globalThis.fetch = originalFetch;
   }
 });
+
+test("Supervisor SSE를 AI SDK 데이터 파트와 정확한 Task ID로 전달한다", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  globalThis.fetch = async (url) => {
+    requestedUrl = String(url);
+    return mockSse([
+      frame("plan_created", { type: "plan_created", plan: "합성 계획" }),
+      frame("task_list_created", { type: "task_list_created", tasks: [
+        { id: "task_1", description: "조사", agent: "research", status: "pending", result: null },
+        { id: "task_2", description: "작성", agent: "writing", status: "pending", result: null },
+      ] }),
+      frame("task_started", { type: "task_started", task_id: "task_1", agent_name: "research" }),
+      frame("sub_agent_tool_call", { type: "sub_agent_tool_call", task_id: "task_1",
+        tool_name: "search_operations_manual", args: { query: "DB" }, status: "start", result: null }),
+      frame("sub_agent_tool_call", { type: "sub_agent_tool_call", task_id: "task_1",
+        tool_name: "search_operations_manual", args: { query: "DB" }, status: "end", result: "합성 결과" }),
+      frame("sub_agent_token", { type: "sub_agent_token", task_id: "task_1", content: "조사 " }),
+      frame("sub_agent_token", { type: "sub_agent_token", task_id: "task_1", content: "완료" }),
+      frame("task_completed", { type: "task_completed", task_id: "task_1", result_preview: "합성 결과" }),
+      frame("task_started", { type: "task_started", task_id: "task_2", agent_name: "writing" }),
+      frame("sub_agent_token", { type: "sub_agent_token", task_id: "task_2", content: "작성 중" }),
+      frame("task_completed", { type: "task_completed", task_id: "task_2", result_preview: "최종 답변" }),
+      frame("token", { type: "token", content: "최종 답변" }),
+      frame("done", { type: "done", thread_id: "multi-thread" }),
+    ]);
+  };
+
+  try {
+    const chat = new Chat<AppMessage>({
+      id: "multi-thread",
+      transport: new BackendChatTransport("http://localhost:8000", "multi"),
+    });
+    await chat.sendMessage({ text: "DB 절차" });
+    assert.equal(requestedUrl, "http://localhost:8000/chat/supervisor/stream");
+    const parts = chat.messages[1].parts;
+    const progress = parts.filter((part) => part.type === "data-supervisorProgress").map((part) => part.data);
+    assert.deepEqual(progress.map((event) => event.type), [
+      "plan_created", "task_list_created", "task_started", "sub_agent_tool_call",
+      "sub_agent_token", "task_completed", "task_started", "sub_agent_token", "task_completed",
+    ]);
+    assert.deepEqual(
+      progress.filter((event) => event.type === "sub_agent_token").map((event) => [event.task_id, event.content]),
+      [["task_1", "조사 완료"], ["task_2", "작성 중"]],
+    );
+    assert.equal(progress.find((event) => event.type === "sub_agent_tool_call")?.status, "end");
+    assert.equal(parts.filter((part) => part.type === "text").map((part) => part.text).join(""), "최종 답변");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("잘못된 Supervisor 이벤트는 수락하지 않는다", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => mockSse([
+    frame("task_started", { type: "task_started", task_id: "task_1", agent_name: "unknown" }),
+  ]);
+  try {
+    const transport = new BackendChatTransport("http://localhost:8000", "multi");
+    const stream = await transport.sendMessages({
+      chatId: "multi-thread",
+      trigger: "submit-message",
+      messageId: undefined,
+      messages: [{ id: "user-1", role: "user", parts: [{ type: "text", text: "질문" }] }],
+      abortSignal: undefined,
+    });
+    const reader = stream.getReader();
+    await assert.rejects(async () => {
+      while (!(await reader.read()).done) { /* consume */ }
+    }, /잘못된 스트림 이벤트/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
