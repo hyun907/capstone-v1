@@ -106,7 +106,7 @@ uv run --locked --extra backend python -m unittest discover -s tests -p 'test_ba
 
 ### 스트리밍 채팅
 
-`POST /chat/stream`은 단일 Agent의 진행 상황을 SSE로 보냅니다. 정상 응답은 `tool_call_start`, `tool_call_end`, `token`, `done` 이벤트가 순서대로 도착합니다. 모델 호출 한도나 스트림 오류가 발생하면 `error` 이벤트로 사용자 안내를 보냅니다. 기존 `POST /chat`도 그대로 사용할 수 있습니다. 요청은 같은 `ChatRequest` 형식을 사용합니다.
+`POST /chat/stream`은 단일 Agent의 진행 상황을 SSE로 보냅니다. 정상 응답은 `tool_call_start`, `tool_call_end`, `token`, `done` 이벤트가 순서대로 도착합니다. 모델 호출 한도, API 크레딧 소진, 스트림 오류가 발생하면 `error` 이벤트로 각각의 사용자 안내를 보냅니다. 기존 `POST /chat`도 그대로 사용할 수 있습니다. 요청은 같은 `ChatRequest` 형식을 사용합니다.
 
 ```bash
 curl -N -X POST http://localhost:8000/chat/stream \

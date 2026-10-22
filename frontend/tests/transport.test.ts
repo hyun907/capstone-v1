@@ -90,13 +90,13 @@ test("done 없이 끊어진 응답은 정상 종료로 처리하지 않는다", 
   }
 });
 
-test("Backend 오류 이벤트의 사용자 안내를 표시한다", async () => {
+test("API 크레딧 소진 오류의 사용자 안내를 표시한다", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => mockSse([
     frame("error", {
       type: "error",
-      code: "MODEL_RATE_LIMIT",
-      message: "OpenAI 요청 한도에 도달했습니다.",
+      code: "API_CREDIT_EXHAUSTED",
+      message: "OpenAI API 크레딧이 소진되었습니다.",
     }),
   ]);
 
@@ -112,7 +112,7 @@ test("Backend 오류 이벤트의 사용자 안내를 표시한다", async () =>
     const reader = stream.getReader();
     await assert.rejects(async () => {
       while (!(await reader.read()).done) { /* consume */ }
-    }, /OpenAI 요청 한도에 도달했습니다/);
+    }, /OpenAI API 크레딧이 소진되었습니다/);
   } finally {
     globalThis.fetch = originalFetch;
   }

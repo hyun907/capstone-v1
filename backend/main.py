@@ -99,10 +99,16 @@ async def chat_stream(payload: ChatRequest, request: Request) -> StreamingRespon
         except Exception as exc:
             logger.error("스트림 생성 실패: %s", type(exc).__name__)
             if isinstance(exc, RateLimitError):
-                yield format_sse(ErrorEvent(
-                    code="MODEL_RATE_LIMIT",
-                    message="OpenAI 요청 한도에 도달했습니다. 잠시 후 다시 시도하고, 계속되면 API 사용량을 확인해 주세요.",
-                ))
+                if exc.code == "credit_balance_exhausted":
+                    yield format_sse(ErrorEvent(
+                        code="API_CREDIT_EXHAUSTED",
+                        message="OpenAI API 크레딧이 소진되었습니다. API 결제 설정에서 잔액을 확인해 주세요.",
+                    ))
+                else:
+                    yield format_sse(ErrorEvent(
+                        code="MODEL_RATE_LIMIT",
+                        message="OpenAI 요청 한도에 도달했습니다. 잠시 후 다시 시도하고, 계속되면 API 사용량을 확인해 주세요.",
+                    ))
             else:
                 yield format_sse(ErrorEvent(
                     code="STREAM_FAILED",

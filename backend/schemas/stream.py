@@ -33,5 +33,5 @@ class DoneEvent(StreamEvent):
 
 class ErrorEvent(StreamEvent):
     type: Literal["error"] = "error"
-    code: Literal["MODEL_RATE_LIMIT", "STREAM_FAILED"]
+    code: Literal["API_CREDIT_EXHAUSTED", "MODEL_RATE_LIMIT", "STREAM_FAILED"]
     message: str

@@ -43,7 +43,9 @@ function parseEvent(frame: string): StreamEvent | null {
       break;
     case "error":
       if (
-        (value.code === "MODEL_RATE_LIMIT" || value.code === "STREAM_FAILED") &&
+        (value.code === "API_CREDIT_EXHAUSTED" ||
+          value.code === "MODEL_RATE_LIMIT" ||
+          value.code === "STREAM_FAILED") &&
         typeof value.message === "string"
       ) {
         return { type: "error", code: value.code, message: value.message };
