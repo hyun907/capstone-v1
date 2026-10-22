@@ -13,9 +13,10 @@ from langchain_core.messages import AIMessage, HumanMessage
 from openai import RateLimitError
 
 from backend.agent.graph import build_agent
+from backend.agent.supervisor_graph import build_supervisor_graph
 from backend.schemas.chat import ChatRequest, ChatResponse
 from backend.schemas.stream import ErrorEvent
-from backend.streaming.event_converter import convert_langgraph_events
+from backend.streaming.event_converter import convert_langgraph_events, convert_supervisor_events
 from backend.streaming.sse_formatter import format_sse
 
 logger = logging.getLogger(__name__)
@@ -23,12 +24,15 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
-    """대화 메모리를 보존할 Agent를 프로세스 시작 시 한 번 준비합니다."""
+    """단일 Agent와 Supervisor의 대화 메모리를 요청 간 보존합니다."""
     application.state.agent = await build_agent()
     try:
+        application.state.supervisor_graph = await build_supervisor_graph()
         yield
     finally:
         del application.state.agent
+        if hasattr(application.state, "supervisor_graph"):
+            del application.state.supervisor_graph
 
 
 app = FastAPI(lifespan=lifespan)
@@ -114,6 +118,28 @@ async def chat_stream(payload: ChatRequest, request: Request) -> StreamingRespon
                     code="STREAM_FAILED",
                     message="응답 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
                 ))
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/chat/supervisor/stream")
+async def chat_supervisor_stream(payload: ChatRequest, request: Request) -> StreamingResponse:
+    """Supervisor의 계획, 작업 진행, 최종 답변을 SSE로 전달합니다."""
+    thread_id = payload.thread_id or str(uuid4())
+
+    async def event_generator() -> AsyncIterator[str]:
+        graph_stream = request.app.state.supervisor_graph.astream(
+            {"messages": [{"role": "user", "content": payload.message}]},
+            {"configurable": {"thread_id": thread_id}},
+            stream_mode=["messages", "updates"],
+            subgraphs=True,
+        )
+        async for event in convert_supervisor_events(graph_stream, thread_id):
+            yield format_sse(event)
 
     return StreamingResponse(
         event_generator(),
