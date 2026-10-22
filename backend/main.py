@@ -5,10 +5,13 @@ from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
+from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage
 
 from backend.agent.graph import build_agent
 from backend.schemas.chat import ChatRequest, ChatResponse
+from backend.streaming.event_converter import convert_langgraph_events
+from backend.streaming.sse_formatter import format_sse
 
 
 @asynccontextmanager
@@ -61,4 +64,25 @@ async def chat(payload: ChatRequest, request: Request) -> ChatResponse:
         thread_id=thread_id,
         message=current_ai_messages[-1].text.strip(),
         tool_calls=tool_calls,
+    )
+
+
+@app.post("/chat/stream")
+async def chat_stream(payload: ChatRequest, request: Request) -> StreamingResponse:
+    """Agent 진행 상황을 SSE로 차례로 전달합니다."""
+    thread_id = payload.thread_id or str(uuid4())
+
+    async def event_generator() -> AsyncIterator[str]:
+        graph_stream = request.app.state.agent.astream(
+            {"messages": [{"role": "user", "content": payload.message}]},
+            {"configurable": {"thread_id": thread_id}},
+            stream_mode=["messages", "updates"],
+        )
+        async for event in convert_langgraph_events(graph_stream, thread_id):
+            yield format_sse(event)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
