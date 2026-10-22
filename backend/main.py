@@ -26,12 +26,13 @@ logger = logging.getLogger(__name__)
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     """단일 Agent와 Supervisor의 대화 메모리를 요청 간 보존합니다."""
     application.state.agent = await build_agent()
-    application.state.supervisor_graph = await build_supervisor_graph()
     try:
+        application.state.supervisor_graph = await build_supervisor_graph()
         yield
     finally:
         del application.state.agent
-        del application.state.supervisor_graph
+        if hasattr(application.state, "supervisor_graph"):
+            del application.state.supervisor_graph
 
 
 app = FastAPI(lifespan=lifespan)

@@ -122,6 +122,18 @@ class BackendMainTests(unittest.TestCase):
                 with TestClient(app):
                     pass
 
+    def test_supervisor_startup_failure_cleans_up_single_agent(self) -> None:
+        with patch("backend.main.build_agent", new=AsyncMock(return_value=SyntheticAgent())):
+            with patch(
+                "backend.main.build_supervisor_graph",
+                new=AsyncMock(side_effect=RuntimeError("synthetic-supervisor-startup-failure")),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "synthetic-supervisor-startup-failure"):
+                    with TestClient(app):
+                        pass
+        self.assertFalse(hasattr(app.state, "agent"))
+        self.assertFalse(hasattr(app.state, "supervisor_graph"))
+
 
 if __name__ == "__main__":
     unittest.main()
