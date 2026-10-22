@@ -1,5 +1,7 @@
 import type { UIMessage } from "ai";
 
+export type ChatMode = "single" | "multi";
+
 // backend/schemas/stream.py와 같은 필드 이름을 사용한다.
 export type StreamEvent =
   | { type: "token"; content: string }
@@ -29,4 +31,12 @@ export interface ToolProgress {
   result?: string | null;
 }
 
-export type AppMessage = UIMessage<unknown, { toolProgress: ToolProgress }>;
+export type SupervisorProgress = Extract<StreamEvent, {
+  type: "plan_created" | "task_list_created" | "task_started" | "task_completed" |
+    "sub_agent_token" | "sub_agent_tool_call";
+}>;
+
+export type AppMessage = UIMessage<unknown, {
+  toolProgress: ToolProgress;
+  supervisorProgress: SupervisorProgress;
+}>;
