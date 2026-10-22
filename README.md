@@ -15,7 +15,7 @@ AI Agent 서비스를 단계별로 직접 구현하고 검증하는 개인 실�
 
 처음에는 [Backend 입구](backend/README.md)에서 `POST /chat` 요청이 어디로 가는지 살펴보세요. 이어서 [Agent](backend/agent/README.md), [MCP 서버](mcp-server/README.md), [API 계약](backend/schemas/README.md), [테스트](tests/README.md)를 읽으면 현재 동작을 한 바퀴 따라갈 수 있습니다. 각 문서는 해당 폴더의 **현재 코드**를 설명하는 학습용 메모입니다.
 
-현재는 단일 Agent와 일반 JSON 응답 방식의 `/chat`까지 구현되어 있습니다. Supervisor, SSE 스트리밍, Next.js 화면, PostgreSQL 저장은 이후 단계입니다.
+현재 단일 Agent의 `/chat`·`/chat/stream`, Supervisor의 `/chat/supervisor/stream`, Next.js의 모드별 화면까지 구현되어 있습니다. 대화 기록은 `MemorySaver`의 프로세스 메모리에 저장됩니다. 라우팅과 PostgreSQL 영구 저장은 이후 단계입니다.
 
 ## 작업 방식
 
@@ -113,6 +113,12 @@ uv run --locked --extra backend python -m unittest discover -s tests -p 'test_ba
 ### 스트리밍 채팅
 
 `POST /chat/stream`은 단일 Agent의 진행 상황을 SSE로 보냅니다. 정상 응답은 `tool_call_start`, `tool_call_end`, `token`, `done` 이벤트가 순서대로 도착합니다. 모델 호출 한도, API 크레딧 소진, 스트림 오류가 발생하면 `error` 이벤트로 각각의 사용자 안내를 보냅니다. 기존 `POST /chat`도 그대로 사용할 수 있습니다. 요청은 같은 `ChatRequest` 형식을 사용합니다.
+
+`POST /chat/supervisor/stream`은 Plan·Task·Sub-Agent 이벤트와 최종 답변을 보냅니다. Next.js 화면에서 Single Agent와 Multi-Agent 모드를 선택할 수 있습니다. 로컬 `backend/.env` 키를 사용할 때는 셸에 남은 이전 키가 우선하지 않도록 다음 명령으로 Backend를 실행합니다.
+
+```bash
+env -u OPENAI_API_KEY uv run --env-file backend/.env --locked --extra backend uvicorn backend.main:app --host localhost --port 8000
+```
 
 ```bash
 curl -N -X POST http://localhost:8000/chat/stream \

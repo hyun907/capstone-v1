@@ -10,6 +10,11 @@
 | [`test_manual_vector.py`](test_manual_vector.py) | 합성 runbook으로 벡터 인덱스 재사용·갱신 |
 | [`test_jira_search_api.py`](test_jira_search_api.py) | Jira 검색 요청·응답과 오류 처리 |
 | [`test_jira_create_api.py`](test_jira_create_api.py) | Jira 생성 요청·응답과 승인 조건 |
+| [`test_backend_streaming.py`](test_backend_streaming.py) | 단일 Agent SSE와 오류 계약 |
+| [`test_backend_supervisor_planning.py`](test_backend_supervisor_planning.py) | Supervisor 계획 검증과 다음 턴 초기화 |
+| [`test_backend_supervisor_execution.py`](test_backend_supervisor_execution.py) | Research·Writing 실행 순서와 조회 도구 제한 |
+| [`test_backend_supervisor_streaming.py`](test_backend_supervisor_streaming.py) | Supervisor SSE 순서·Task ID·오류 계약 |
+| [`test_backend_supervisor_endpoint.py`](test_backend_supervisor_endpoint.py) | Supervisor HTTP SSE와 thread_id 재사용 |
 
 프로젝트 루트에서 의존성을 설치하고 전체 테스트를 실행합니다.
 
@@ -18,4 +23,4 @@ uv sync --locked --extra backend
 uv run --locked --extra backend python -m unittest discover -s tests -v
 ```
 
-하나만 살펴보고 싶다면 마지막 명령에 `-p 'test_backend_agent_graph.py'`를 추가하세요. 이 테스트는 실제 OpenAI 응답 품질이나 Next.js 화면을 검증하지 않습니다. 현재 저장소에는 Next.js 화면이 없습니다.
+하나만 살펴보고 싶다면 마지막 명령에 `-p 'test_backend_agent_graph.py'`를 추가하세요. 이 Backend 테스트는 실제 OpenAI 응답 품질을 검증하지 않습니다. Next.js의 합성 검증은 `cd frontend && npm test && npm run test:e2e`로 실행합니다. 실제 모델과 화면에서 관찰한 F1~F3 값은 로컬 제출물에 기록합니다.
