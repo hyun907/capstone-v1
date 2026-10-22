@@ -11,6 +11,12 @@ AI Agent 서비스를 단계별로 직접 구현하고 검증하는 개인 실�
 
 구현 단계와 실제 완료 여부는 이후 이슈와 PR에서 기록합니다.
 
+## 코드 읽는 순서
+
+처음에는 [Backend 입구](backend/README.md)에서 `POST /chat` 요청이 어디로 가는지 살펴보세요. 이어서 [Agent](backend/agent/README.md), [MCP 서버](mcp-server/README.md), [API 계약](backend/schemas/README.md), [테스트](tests/README.md)를 읽으면 현재 동작을 한 바퀴 따라갈 수 있습니다. 각 문서는 해당 폴더의 **현재 코드**를 설명하는 학습용 메모입니다.
+
+현재는 단일 Agent와 일반 JSON 응답 방식의 `/chat`까지 구현되어 있습니다. Supervisor, SSE 스트리밍, Next.js 화면, PostgreSQL 저장은 이후 단계입니다.
+
 ## 작업 방식
 
 - [코드·Git 컨벤션](docs/CONVENTIONS.md)을 따릅니다.
