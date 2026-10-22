@@ -13,12 +13,12 @@ button { cursor: pointer; }
 .eyebrow { color: #2f7584; font-size: 11px; font-weight: 700; letter-spacing: .14em; }
 h1 { margin: 8px 0 6px; font-size: 25px; line-height: 1.25; letter-spacing: -.03em; }
 .header p { margin: 0; color: #607080; font-size: 14px; }
+.header-actions { display: flex; flex: none; align-items: flex-end; flex-direction: column; gap: 10px; }
 .new-thread { flex: none; border: 1px solid #cbd7dc; border-radius: 9px; background: #fff; color: #245766; padding: 9px 13px; font-size: 13px; font-weight: 600; }
 .new-thread:hover { background: #f0f7f8; }
-.thread-bar { display: flex; align-items: center; gap: 8px; padding: 11px 32px; background: #f8fafb; color: #61707b; font-size: 12px; border-bottom: 1px solid #edf0f2; }
+.thread-bar { display: flex; align-items: center; gap: 8px; color: #61707b; font-size: 12px; }
 .thread-indicator { width: 7px; height: 7px; border-radius: 50%; background: #39a185; }
 .thread-bar code { color: #254d58; font-weight: 700; }
-.thread-hint { margin-left: auto; color: #88969f; }
 .conversation { flex: 1; min-height: 400px; padding: 30px 32px 40px; overflow-y: auto; }
 .empty-state { display: flex; min-height: 360px; align-items: center; justify-content: center; flex-direction: column; text-align: center; color: #61707c; }
 .empty-mark { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: #e5f4f3; color: #247a78; font-size: 28px; }
@@ -53,4 +53,4 @@ h1 { margin: 8px 0 6px; font-size: 25px; line-height: 1.25; letter-spacing: -.03
 .footer p { margin: 9px 0 0; color: #8a99a0; font-size: 11px; }
 @keyframes pulse { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { .tool-dot.pending { animation: none; } }
-@media (max-width: 600px) { .header, .conversation, .footer { padding-left: 18px; padding-right: 18px; } .header { align-items: center; } h1 { font-size: 20px; } .header p, .thread-hint { display: none; } .thread-bar { padding: 11px 18px; } .message { max-width: 94%; } }
+@media (max-width: 600px) { .header, .conversation, .footer { padding-left: 18px; padding-right: 18px; } .header { align-items: center; } h1 { font-size: 20px; } .header p { display: none; } .message { max-width: 94%; } }

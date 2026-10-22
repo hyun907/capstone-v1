@@ -37,15 +37,15 @@ function ChatSession({ threadId, onNewThread }: { threadId: string; onNewThread:
           <h1>ICT 운영 지원 Agent</h1>
           <p>도구 사용과 답변이 진행되는 순서대로 표시됩니다.</p>
         </div>
-        <button className="new-thread" onClick={handleNewThread} type="button">새 대화</button>
+        <div className="header-actions">
+          <div className="thread-bar">
+            <span className="thread-indicator" />
+            <span>대화 ID</span>
+            <code title={threadId}>{threadId.slice(0, 8)}</code>
+          </div>
+          <button className="new-thread" onClick={handleNewThread} type="button">새 대화</button>
+        </div>
       </header>
-
-      <div className="thread-bar">
-        <span className="thread-indicator" />
-        <span>대화 ID</span>
-        <code title={threadId}>{threadId.slice(0, 8)}</code>
-        <span className="thread-hint">새로고침해도 같은 ID를 사용합니다</span>
-      </div>
 
       <main aria-live="polite" className="conversation">
         {messages.length === 0 ? (
