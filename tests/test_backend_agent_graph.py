@@ -3,7 +3,6 @@
 import os
 import unittest
 from collections.abc import Sequence
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -182,7 +181,7 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_loads_mcp_tools_when_tools_are_not_injected(self) -> None:
         get_tools = AsyncMock(return_value=SYNTHETIC_TOOLS)
-        with patch("backend.agent.graph.create_mcp_client", return_value=SimpleNamespace(get_tools=get_tools)):
+        with patch("backend.agent.graph.get_mcp_tools", get_tools):
             model = SyntheticChatModel()
             agent = await build_agent(model=model)
             await agent.ainvoke(

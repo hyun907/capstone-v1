@@ -8,7 +8,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from backend.agent.mcp_client import MCP_SERVER_NAME, create_mcp_client
+from backend.agent.mcp_client import MCP_SERVER_NAME, create_mcp_client, get_mcp_tools
+from backend.schemas.error import ToolError
 
 
 class BackendMcpClientTests(unittest.IsolatedAsyncioTestCase):
@@ -31,7 +32,7 @@ class BackendMcpClientTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(Path(connection["args"][0]).name, "server.py")
             self.assertNotIn("OPENAI_API_KEY", connection["env"])
 
-            tools = await client.get_tools()
+            tools = await get_mcp_tools(client)
             self.assertEqual(
                 {tool.name for tool in tools},
                 {
@@ -43,6 +44,7 @@ class BackendMcpClientTests(unittest.IsolatedAsyncioTestCase):
             )
 
             search = next(tool for tool in tools if tool.name == "search_jira_tickets")
+            self.assertIs(search.handle_tool_error, False)
             blocks = await search.ainvoke(
                 {"query": "synthetic-incident", "project_key": "OPS", "max_results": 1}
             )
@@ -57,7 +59,27 @@ class BackendMcpClientTests(unittest.IsolatedAsyncioTestCase):
             client = create_mcp_client(missing)
             self.assertEqual(client.connections[MCP_SERVER_NAME]["args"], [str(missing.resolve())])
             with self.assertRaises(Exception):
-                await client.get_tools()
+                await get_mcp_tools(client)
+
+    async def test_subprocess_failure_after_discovery_becomes_tool_error(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="mcp-tool-failure-") as directory:
+            server = Path(directory) / "synthetic_server.py"
+            server.write_text(
+                "from fastmcp import FastMCP\n"
+                "mcp = FastMCP('synthetic')\n"
+                "@mcp.tool\n"
+                "def get_monitoring_status(system_name: str) -> str:\n"
+                "    return 'synthetic healthy'\n"
+                "if __name__ == '__main__':\n"
+                "    mcp.run(transport='stdio')\n",
+                encoding="utf-8",
+            )
+            tools = await get_mcp_tools(create_mcp_client(server))
+            server.unlink()
+            with self.assertRaises(ToolError) as caught:
+                await tools[0].ainvoke({"system_name": "synthetic-service"})
+            self.assertEqual(caught.exception.error.code, "TOOL_EXECUTION_ERROR")
+            self.assertNotIn(str(server), caught.exception.error.user_message)
 
 
 if __name__ == "__main__":

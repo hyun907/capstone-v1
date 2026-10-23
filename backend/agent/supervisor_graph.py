@@ -16,7 +16,7 @@ from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from backend.agent.graph import READ_ONLY_TOOL_NAMES
-from backend.agent.mcp_client import create_mcp_client
+from backend.agent.mcp_client import get_mcp_tools
 from backend.config import AppSettings
 
 MAX_TASKS = 6
@@ -115,7 +115,7 @@ async def build_supervisor_graph(
         planner = model.with_structured_output(PlanningDecision)
 
     if research_agent is None:
-        available_tools = list(tools) if tools is not None else await create_mcp_client().get_tools()
+        available_tools = list(tools) if tools is not None else await get_mcp_tools()
         read_only_tools = [tool for tool in available_tools if tool.name in READ_ONLY_TOOL_NAMES]
         if {tool.name for tool in read_only_tools} != READ_ONLY_TOOL_NAMES:
             raise ValueError("필수 조회 도구 3개를 모두 찾지 못했습니다.")

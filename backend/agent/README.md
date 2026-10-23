@@ -18,7 +18,7 @@ Agent는 질문에 답할 때 필요한 조회 도구를 LLM이 선택하도록 
 
 `MemorySaver`는 `configurable.thread_id`를 기준으로 대화를 구분합니다. 같은 서버 프로세스에서 같은 ID를 다시 보내야 이전 대화를 이어 볼 수 있습니다. PostgreSQL 같은 영구 저장은 아직 없습니다.
 
-도구 오류는 현재 Agent에서 별도 안내 문구로 바꾸지 않고 호출자에게 전파합니다. 관련 동작은 [`test_backend_agent_graph.py`](../../tests/test_backend_agent_graph.py)에서 합성 모델과 도구로 검증합니다.
+MCP 조회 도구의 timeout은 최대 두 번 재시도한 뒤 `ToolError`로 전파합니다. 다른 실행 오류는 즉시 `ToolError`로 전파하며, 단일 Agent 호출자는 기존처럼 실패를 받습니다. 생성 도구는 중복 쓰기를 막기 위해 재시도 대상에서 제외합니다. 도구 목록을 찾는 시작 단계의 실패는 호출 실패와 구분해 그대로 전파합니다. 관련 동작은 [`test_backend_tool_retry.py`](../../tests/test_backend_tool_retry.py)와 [`test_backend_mcp_client.py`](../../tests/test_backend_mcp_client.py)에서 확인합니다.
 
 ## Supervisor 계획과 실행
 
