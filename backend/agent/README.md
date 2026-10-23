@@ -24,6 +24,6 @@ MCP 조회 도구의 timeout은 최대 두 번 재시도한 뒤 `ToolError`로 �
 
 `build_supervisor_graph()`는 `planning → start_task → execute_task`를 Task마다 반복하고 `finalize`로 끝납니다. 마지막 사용자 메시지와 이전 대화를 보고 계획과 최대 6개의 Task를 만듭니다. Research Task는 앞에 두고 Writing Task 하나로 끝나야 합니다. 출력은 Pydantic으로 검증하며 형식이 잘못된 계획은 한 번 다시 요청하고, 두 번째도 잘못되면 실행하지 않습니다.
 
-Research Agent에는 조회 도구 3개만 연결하며 Jira 생성 도구는 제외합니다. Writing Agent는 원래 질문과 앞선 Research 결과를 받아 답변합니다. `start_task`와 `execute_task`가 각각 `in_progress`, `completed`를 기록하므로 이후 SSE 변환에서 두 상태를 별도로 볼 수 있습니다. 작업은 최대 6개이고 그래프 단계 수도 제한합니다. 도구·모델 오류는 호출자에게 전파됩니다.
+Research Agent에는 조회 도구 3개만 연결하며 Jira 생성 도구는 제외합니다. Writing Agent는 원래 질문과 성공한 Research 결과, 실패한 작업의 안전한 안내문을 받아 답변합니다. `start_task`와 `execute_task`는 각각 `in_progress`, `completed` 또는 `failed`를 기록합니다. 실패한 Task가 있어도 다음 Task를 실행하고, Writing도 실패하면 수집된 자료나 재시도 안내로 빈 답변을 피합니다. 작업은 최대 6개이고 그래프 단계 수도 제한합니다. 계획 수립 실패는 Task가 만들어지기 전이므로 호출자에게 전파됩니다.
 
 같은 `thread_id`를 다시 쓰면 메시지 이력은 이어지지만, 매 사용자 턴마다 계획·Task 목록·현재 위치를 새로 작성합니다. 실제 모델 호출 없이 확인하는 테스트는 [`test_backend_supervisor_planning.py`](../../tests/test_backend_supervisor_planning.py)와 [`test_backend_supervisor_execution.py`](../../tests/test_backend_supervisor_execution.py)에 있습니다.
