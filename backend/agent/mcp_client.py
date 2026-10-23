@@ -2,9 +2,13 @@
 
 import os
 import sys
+from functools import wraps
 from pathlib import Path
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_core.tools import BaseTool, StructuredTool
+
+from backend.error_handling.retry import with_retry
 
 MCP_SERVER_NAME = "ict-operations-support"
 MCP_SERVER_PATH = Path(__file__).resolve().parents[2] / "mcp-server" / "server.py"
@@ -13,6 +17,9 @@ MCP_SERVER_ENV_KEYS = (
     "JIRA_EMAIL",
     "JIRA_API_TOKEN",
     "FASTEMBED_CACHE_PATH",
+)
+READ_ONLY_MCP_TOOL_NAMES = frozenset(
+    {"get_monitoring_status", "search_operations_manual", "search_jira_tickets"}
 )
 
 
@@ -38,3 +45,32 @@ def create_mcp_client(server_path: Path | None = None) -> MultiServerMCPClient:
             }
         }
     )
+
+
+def wrap_mcp_tool(tool: BaseTool) -> BaseTool:
+    """조회 도구 실행 실패를 ToolError로 전달합니다.
+
+    생성 도구는 timeout 후 재호출하면 중복 쓰기가 생길 수 있어 감싸지 않습니다.
+    """
+    if tool.name not in READ_ONLY_MCP_TOOL_NAMES:
+        return tool
+    if not isinstance(tool, StructuredTool) or tool.coroutine is None:
+        raise TypeError(f"조회 도구 {tool.name}의 비동기 실행 함수를 찾지 못했습니다.")
+
+    original_coroutine = tool.coroutine
+
+    @wraps(original_coroutine)
+    async def wrapped(*args, **kwargs):
+        return await with_retry(
+            lambda: original_coroutine(*args, **kwargs), tool_name=tool.name
+        )
+
+    tool.coroutine = wrapped
+    tool.handle_tool_error = False
+    return tool
+
+
+async def get_mcp_tools(client: MultiServerMCPClient | None = None) -> list[BaseTool]:
+    """도구 발견 실패는 시작 단계로 전파하고, 실행 경계만 표준화합니다."""
+    discovered = await (client or create_mcp_client()).get_tools()
+    return [wrap_mcp_tool(tool) for tool in discovered]
