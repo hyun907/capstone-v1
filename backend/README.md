@@ -106,7 +106,11 @@ docker compose exec postgres psql -U capstone -d capstone_state -c '\dt'
 uv run --env-file backend/.env --locked --extra backend python -m unittest discover -s tests -p 'test_backend_checkpointer.py' -v
 ```
 
-`backend.persistence.checkpointer.create_checkpointer()`는 연결을 열고 `setup()`으로 테이블을 준비하며 context 종료 시 연결을 닫습니다. 이 준비 단계에서는 아직 Backend lifespan에 연결되지 않았습니다.
+`backend.persistence.checkpointer.create_checkpointer()`는 연결을 열고 `setup()`으로 테이블을 준비하며 context 종료 시 연결을 닫습니다. Backend lifespan은 이를 시작 시 한 번 만들고 단일 Agent와 Supervisor에 주입합니다. Backend 실행에도 같은 `.env`를 지정합니다.
+
+```bash
+uv run --env-file backend/.env --locked --extra backend uvicorn backend.main:app --port 8000
+```
 
 ## Cost & Latency 측정 (A31)
 

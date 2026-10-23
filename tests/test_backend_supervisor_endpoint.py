@@ -11,6 +11,7 @@ from langchain_core.runnables import RunnableLambda
 
 from backend.agent.supervisor_graph import build_supervisor_graph
 from backend.main import app
+from backend_test_helpers import fake_checkpointer
 
 
 def parse_events(body: str) -> list[dict]:
@@ -27,6 +28,11 @@ def parse_events(body: str) -> list[dict]:
 
 
 class SupervisorEndpointTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        checkpointer_patcher = patch("backend.main.create_checkpointer", fake_checkpointer)
+        checkpointer_patcher.start()
+        self.addCleanup(checkpointer_patcher.stop)
+
     async def test_streams_plan_tasks_final_answer_and_reuses_thread(self) -> None:
         def planner(messages):
             users = [message for message in messages if isinstance(message, HumanMessage)]

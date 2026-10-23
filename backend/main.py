@@ -14,6 +14,7 @@ from openai import RateLimitError
 
 from backend.agent.graph import build_agent
 from backend.agent.supervisor_graph import build_supervisor_graph
+from backend.persistence.checkpointer import create_checkpointer
 from backend.schemas.chat import ChatRequest, ChatResponse
 from backend.schemas.stream import ErrorEvent
 from backend.streaming.event_converter import (
@@ -27,15 +28,20 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
-    """단일 Agent와 Supervisor의 대화 메모리를 요청 간 보존합니다."""
-    application.state.agent = await build_agent()
-    try:
-        application.state.supervisor_graph = await build_supervisor_graph()
-        yield
-    finally:
-        del application.state.agent
-        if hasattr(application.state, "supervisor_graph"):
-            del application.state.supervisor_graph
+    """PostgreSQL checkpointer를 서버 수명 동안 공유하고 종료 때 닫습니다."""
+    async with create_checkpointer() as checkpointer:
+        application.state.checkpointer = checkpointer
+        try:
+            application.state.agent = await build_agent(checkpointer=checkpointer)
+            application.state.supervisor_graph = await build_supervisor_graph(
+                checkpointer=checkpointer
+            )
+            print("Backend startup complete (PostgreSQL checkpointer active)", flush=True)
+            yield
+        finally:
+            for name in ("agent", "supervisor_graph", "checkpointer"):
+                if hasattr(application.state, name):
+                    delattr(application.state, name)
 
 
 app = FastAPI(lifespan=lifespan)

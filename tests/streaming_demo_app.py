@@ -1,6 +1,7 @@
 """브라우저 E2E 테스트에서만 쓰는 합성 스트리밍 Agent."""
 
 import asyncio
+from contextlib import asynccontextmanager
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
@@ -42,7 +43,7 @@ class DemoAgent:
             yield "messages", (AIMessageChunk(content=part), {})
 
 
-async def demo_builder() -> DemoAgent:
+async def demo_builder(*, checkpointer=None) -> DemoAgent:
     return DemoAgent()
 
 
@@ -93,10 +94,18 @@ class DemoSupervisor:
         yield (), "updates", {"finalize": {"messages": [AIMessage(content=answer)]}}
 
 
-async def demo_supervisor_builder() -> DemoSupervisor:
+async def demo_supervisor_builder(*, checkpointer=None) -> DemoSupervisor:
     return DemoSupervisor()
 
 
 backend_main.build_agent = demo_builder
 backend_main.build_supervisor_graph = demo_supervisor_builder
+
+
+@asynccontextmanager
+async def demo_checkpointer():
+    yield object()
+
+
+backend_main.create_checkpointer = demo_checkpointer
 app = backend_main.app
