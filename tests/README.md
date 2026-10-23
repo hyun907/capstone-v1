@@ -15,6 +15,11 @@
 | [`test_backend_supervisor_execution.py`](test_backend_supervisor_execution.py) | Research·Writing 실행 순서와 조회 도구 제한 |
 | [`test_backend_supervisor_streaming.py`](test_backend_supervisor_streaming.py) | Supervisor SSE 순서·Task ID·오류 계약 |
 | [`test_backend_supervisor_endpoint.py`](test_backend_supervisor_endpoint.py) | Supervisor HTTP SSE와 thread_id 재사용 |
+| [`test_backend_eval_dataset.py`](test_backend_eval_dataset.py) | LangSmith Dataset 예시 5건과 중복 생성 방지 |
+| [`test_backend_eval_target.py`](test_backend_eval_target.py) | Supervisor 직접 호출 Target과 예시별 thread 분리 |
+| [`test_backend_eval_evaluators.py`](test_backend_eval_evaluators.py) | 기대 토픽 평가자의 점수와 누락 처리 |
+| [`test_backend_eval_judge.py`](test_backend_eval_judge.py) | LLM Judge의 구조화 점수와 오류 처리 |
+| [`test_backend_eval_runner.py`](test_backend_eval_runner.py) | Experiment 실행 설정과 누락 점수 감지 |
 
 프로젝트 루트에서 의존성을 설치하고 전체 테스트를 실행합니다.
 
