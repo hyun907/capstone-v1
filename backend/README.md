@@ -27,7 +27,60 @@ POST /chat → ChatRequest 검사 → thread_id 준비 → Agent 실행
 | [`schemas/`](schemas/README.md) | 요청과 응답의 데이터 모양 |
 | [`agent/`](agent/README.md) | LLM, 도구, 대화 메모리를 연결한 Agent |
 | [`streaming/`](streaming/README.md) | LangGraph 이벤트를 SSE 이벤트로 변환 |
+| [`eval/`](eval/README.md) | Supervisor 평가 데이터셋과 LangSmith Experiment 실행 |
 
 프로젝트 루트에서 `uv run --locked --extra backend uvicorn backend.main:app`으로 실행합니다. 실제 모델 호출에는 `OPENAI_API_KEY`가 필요합니다. 외부 호출 없이 HTTP 계약을 확인하려면 [Backend 테스트](../tests/README.md)를 사용하세요.
 
 현재 Next.js 화면은 단일 Agent 경로에 연결되어 있습니다. Supervisor 화면 연결은 후속 단계입니다.
+
+## Supervisor trace 확인 (O1)
+
+LangGraph와 LangChain의 [LangSmith 추적 안내](https://docs.langchain.com/langsmith/trace-with-langgraph)에 따르면 `LANGSMITH_TRACING=true`와 `LANGSMITH_API_KEY`를 설정하면 별도 계측 코드 없이 그래프 실행을 기록할 수 있습니다. `LANGSMITH_PROJECT`로 trace를 모을 프로젝트를 지정합니다. trace에는 질문, 모델 입출력, 도구 인자와 결과가 포함될 수 있으므로 **합성 데이터만 있는 별도 복사본**에서 확인합니다.
+
+프로젝트 루트에서 추적 중인 파일만 임시 디렉터리로 복사하고, 그곳에 합성 데이터와 추적 전용 환경 파일을 만듭니다. 원본 `mcp-server/data/`는 복사하거나 수정하지 않습니다.
+
+```bash
+trace_root=$(mktemp -d)
+git archive HEAD | tar -x -C "$trace_root"
+cd "$trace_root"
+mkdir -p mcp-server/data/runbooks
+cat > mcp-server/data/runbooks/db-down.md <<'EOF'
+# 합성 데이터베이스 장애 절차
+
+데이터베이스 다운이 의심되면 연결 오류와 헬스 체크를 확인하고, 로그를 살핀 뒤 담당자에게 에스컬레이션합니다. 복구 전에는 영향 범위를 기록합니다.
+EOF
+cat > mcp-server/data/runbooks/auth-failure.md <<'EOF'
+# 합성 인증 장애 절차
+
+로그인 실패 시 인증 서비스 상태와 최근 오류를 확인하고 로그를 살핍니다.
+EOF
+cat > mcp-server/data/monitoring.json <<'EOF'
+{"db-service":{"status":"down","cpu_percent":0,"memory_percent":0,"alerts":["합성 데이터베이스 연결 오류"]},"auth-service":{"status":"healthy","cpu_percent":12,"memory_percent":30,"alerts":[]}}
+EOF
+```
+
+`backend/.env.trace`를 이 임시 디렉터리에 직접 만들고 아래 **변수 이름**에 본인의 키를 넣습니다. 이 파일은 Git에서 제외되며, Jira 설정은 넣지 않아 mock 검색을 사용합니다. 키가 여러 LangSmith workspace에 연결되어 있다면 `LANGSMITH_WORKSPACE_ID`도 설정합니다. 미국 외 리전이면 계정의 `LANGSMITH_ENDPOINT`를 추가합니다.
+
+```text
+OPENAI_API_KEY=<본인의 OpenAI 키>
+LANGSMITH_API_KEY=<본인의 LangSmith 키>
+LANGSMITH_TRACING=true
+LANGSMITH_PROJECT=capstone-observability
+```
+
+첫 번째 터미널에서 Backend를 실행하고, 두 번째 터미널에서 과제 질문을 한 번 보냅니다. 기존 셸의 Jira 설정을 제거한 채 실행해야 mock 검색을 유지할 수 있습니다. `uv`의 환경 파일보다 셸 변수가 우선할 수 있으므로 키와 추적 변수도 셸에서 제거한 뒤 전용 파일을 읽습니다.
+
+```bash
+env -u OPENAI_API_KEY -u LANGSMITH_API_KEY -u LANGSMITH_TRACING -u LANGSMITH_PROJECT \
+  -u JIRA_BASE_URL -u JIRA_EMAIL -u JIRA_API_TOKEN \
+  uv run --env-file backend/.env.trace --locked --extra backend \
+  uvicorn backend.main:app --host localhost --port 8000
+```
+
+```bash
+curl -N -X POST http://localhost:8000/chat/supervisor/stream \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"데이터베이스 다운 시 대응 절차와 최근 관련 incident를 종합해 가이드를 만들어 주세요."}'
+```
+
+LangSmith의 `capstone-observability` 프로젝트에서 이 요청의 trace ID와 실행 시각을 확인합니다. 현재 그래프의 노드 이름은 `planning → (start_task → execute_task)` 반복 → `finalize`입니다. trace에서 Task 순서, Research·Writing 호출, Tool 이름과 인자, 각 단계의 시간과 토큰을 대조합니다. 비용이나 일부 하위 실행 정보가 표시되지 않으면 값을 추정하지 말고 미확인으로 기록합니다. 캡처에는 합성 데이터와 mock 결과만 보이는지 확인한 후, 임시 디렉터리와 환경 파일을 삭제합니다.
