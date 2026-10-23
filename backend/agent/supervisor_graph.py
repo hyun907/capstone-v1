@@ -28,9 +28,14 @@ SUPERVISOR_RECURSION_LIMIT = 2 * MAX_TASKS + 6
 PLANNING_PROMPT = """당신은 ICT 운영 지원 Supervisor입니다.
 가장 최근 사용자 요청을 해결할 짧은 계획과 실행할 작업을 만드세요.
 이전 대화는 문맥으로만 참고하세요. 도구를 이미 실행한 것처럼 쓰지 마세요.
-작업은 최대 6개이며, 정보 수집이 필요하면 research 작업을 먼저 배치하세요.
-마지막 작업은 반드시 writing 하나로 끝내세요. 인사처럼 검색이 불필요하면 writing 작업 하나면 됩니다.
-research는 조회만 담당하고 Jira 티켓 생성은 계획하지 마세요.
+작업은 최대 6개입니다. 정보 수집이 필요하면 research 작업을 먼저 배치하세요.
+tasks에는 writing 작업을 정확히 1개만 넣고 반드시 맨 마지막에 배치하세요.
+research 작업 뒤에 writing을 여러 개 만들거나 writing 뒤에 research를 넣지 마세요.
+인사처럼 검색이 불필요하면 tasks에는 writing 작업 하나만 넣으세요.
+research는 시스템 상태, 운영 매뉴얼, Jira 이력 중 실제 조회가 필요한 출처만 확인합니다.
+같은 출처를 여러 작업으로 나누지 말고, 간단한 질문에는 research를 최대 1개만 만드세요.
+로그 파일·백업 확인·팀원 연락처럼 연결된 도구로 할 수 없는 작업과 Jira 티켓 생성은 계획하지 마세요.
+writing 작업은 사용자의 질문에 직접 답하는 최종 응답을 작성해야 합니다.
 """
 
 RESEARCH_PROMPT = """당신은 ICT 운영 지원 Research Agent입니다.
@@ -104,19 +109,26 @@ async def build_supervisor_graph(
     research_agent: Runnable | None = None,
     writing_agent: Runnable | None = None,
     model: BaseChatModel | None = None,
+    planning_model: BaseChatModel | None = None,
     tools: Sequence[BaseTool] | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
 ) -> Runnable:
     """조회 전용 Research와 LLM Writing을 포함한 Supervisor를 만듭니다."""
-    if planner is None or research_agent is None or writing_agent is None:
-        model = model if model is not None else ChatOpenAI(
+    quality_model = model
+    if research_agent is None or writing_agent is None:
+        quality_model = quality_model or ChatOpenAI(
             model=AppSettings().model_name,
             temperature=0,
             max_retries=1,
         )
 
     if planner is None:
-        planner = model.with_structured_output(PlanningDecision)
+        planning_model = planning_model or model or ChatOpenAI(
+            model=AppSettings().planning_model_name,
+            temperature=0,
+            max_retries=1,
+        )
+        planner = planning_model.with_structured_output(PlanningDecision)
 
     if research_agent is None:
         available_tools = list(tools) if tools is not None else await get_mcp_tools()
@@ -126,14 +138,14 @@ async def build_supervisor_graph(
         if len(read_only_tools) != len(READ_ONLY_TOOL_NAMES):
             raise ValueError("동일한 이름의 조회 도구가 중복되었습니다.")
         research_agent = create_agent(
-            model=model,
+            model=quality_model,
             tools=read_only_tools,
             system_prompt=RESEARCH_PROMPT,
         )
 
     if writing_agent is None:
         writing_agent = create_agent(
-            model=model,
+            model=quality_model,
             tools=[],
             system_prompt=WRITING_PROMPT,
         )

@@ -1,6 +1,8 @@
 """외부 모델 없이 Supervisor 계획 상태와 검증 규칙을 확인합니다."""
 
 import unittest
+from types import SimpleNamespace
+from unittest.mock import MagicMock, call, patch
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableLambda
@@ -24,6 +26,41 @@ def make_plan(*agents: str) -> dict:
 
 
 class SupervisorPlanningTests(unittest.IsolatedAsyncioTestCase):
+    async def test_default_planning_and_subagents_use_separate_models(self) -> None:
+        quality_model = MagicMock()
+        fast_model = MagicMock()
+        fast_model.with_structured_output.return_value = RunnableLambda(
+            lambda _: make_plan("writing")
+        )
+        agent = RunnableLambda(
+            lambda _: {"messages": [AIMessage(content="합성 답변")]}
+        )
+        tools = [
+            SimpleNamespace(name=name)
+            for name in (
+                "get_monitoring_status",
+                "search_operations_manual",
+                "search_jira_tickets",
+            )
+        ]
+
+        with patch("backend.agent.supervisor_graph.ChatOpenAI") as chat_model, patch(
+            "backend.agent.supervisor_graph.create_agent", return_value=agent
+        ) as create:
+            chat_model.side_effect = [quality_model, fast_model]
+            await build_supervisor_graph(tools=tools)
+
+        self.assertEqual(
+            chat_model.call_args_list,
+            [
+                call(model="gpt-4o", temperature=0, max_retries=1),
+                call(model="gpt-4o-mini", temperature=0, max_retries=1),
+            ],
+        )
+        fast_model.with_structured_output.assert_called_once()
+        self.assertIs(create.call_args_list[0].kwargs["model"], quality_model)
+        self.assertIs(create.call_args_list[1].kwargs["model"], quality_model)
+
     @staticmethod
     def make_agents() -> dict:
         return {

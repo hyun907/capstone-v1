@@ -67,7 +67,7 @@ uv sync --locked --extra backend
 uv run --locked --extra backend python -c "from backend.config import AppSettings; from backend.schemas.chat import ChatRequest, ChatResponse; print(AppSettings().model_name)"
 ```
 
-모델 이름은 `OPENAI_MODEL` 환경변수로 변경할 수 있고 기본값은 `gpt-4o`입니다. 이후 Agent 연결에 필요한 `OPENAI_API_KEY`도 프로세스 환경변수로 전달합니다. 로컬 `backend/.env`를 쓰는 경우 `uv run --env-file backend/.env --extra backend ...`로 불러올 수 있으며, 이 파일은 Git 추적에서 제외됩니다. `AppSettings.openai_api_key_configured`는 키를 출력·저장하지 않고 비어 있지 않은지만 확인합니다.
+단일 Agent와 Supervisor의 Research·Writing 모델은 `OPENAI_MODEL` 환경변수로 변경할 수 있고 기본값은 `gpt-4o`입니다. Supervisor Planning 모델은 `OPENAI_PLANNING_MODEL`로 변경할 수 있고 기본값은 `gpt-4o-mini`입니다. Agent 연결에 필요한 `OPENAI_API_KEY`도 프로세스 환경변수로 전달합니다. 로컬 `backend/.env`를 쓰는 경우 `uv run --env-file backend/.env --extra backend ...`로 불러올 수 있으며, 이 파일은 Git 추적에서 제외됩니다. `AppSettings.openai_api_key_configured`는 키를 출력·저장하지 않고 비어 있지 않은지만 확인합니다.
 
 ### Backend MCP 도구 연결
 
