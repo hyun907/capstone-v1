@@ -68,11 +68,11 @@ async def convert_supervisor_events(
 ) -> AsyncIterator[StreamEvent]:
     """Supervisor와 중첩 Sub-Agent 스트림을 Task ID가 있는 SSE 이벤트로 바꿉니다.
 
-    호출자는 ``subgraphs=True``와 ``stream_mode=["messages", "updates"]``를 사용합니다.
-    중첩 namespace의 execute_task 실행 ID를 현재 시작된 Task ID에 묶습니다.
+    호출자는 ``subgraphs=True``와 ``stream_mode=["messages", "updates", "custom"]``를 사용합니다.
+    중첩 메시지의 Task ID 메타데이터로 병렬 Sub-Agent namespace를 구분합니다.
     """
     previous_tasks: list[dict[str, Any]] = []
-    active_task_id: str | None = None
+    active_task_ids: set[str] = set()
     finalized = False
     namespace_tasks: dict[tuple[str, ...], str] = {}
     tool_calls: dict[tuple[str, str], tuple[str, dict[str, Any]]] = {}
@@ -86,10 +86,28 @@ async def convert_supervisor_events(
                 mode, data = item
                 namespace = ()
 
+            if mode == "custom" and not namespace:
+                if data.get("kind") == "task_started":
+                    task_id = data["task_id"]
+                    agent_name = data["agent"]
+                    if task_id in active_task_ids or not any(
+                        task["id"] == task_id
+                        and task["agent"] == agent_name
+                        and task["status"] == "pending"
+                        for task in previous_tasks
+                    ):
+                        raise ValueError("Supervisor 작업 시작 상태를 확인할 수 없습니다.")
+                    active_task_ids.add(task_id)
+                    yield TaskStartedEvent(task_id=task_id, agent_name=agent_name)
+                continue
+
             task_id: str | None = None
-            if namespace and namespace[0].startswith("execute_task:"):
-                if namespace not in namespace_tasks and active_task_id:
-                    namespace_tasks[namespace] = active_task_id
+            if namespace and namespace[0].startswith(("execute_research:", "execute_writing:")):
+                if mode == "messages":
+                    message, metadata = data
+                    candidate = metadata.get("supervisor_task_id")
+                    if candidate in active_task_ids:
+                        namespace_tasks[namespace] = candidate
                 task_id = namespace_tasks.get(namespace)
 
             if namespace:
@@ -141,36 +159,28 @@ async def convert_supervisor_events(
                     yield PlanCreatedEvent(plan=node_update["plan"])
                     previous_tasks = node_update["tasks"]
                     yield TaskListCreatedEvent(tasks=previous_tasks)
-                elif node_name == "start_task":
-                    tasks = node_update["tasks"]
-                    started = [
-                        new for old, new in zip(previous_tasks, tasks)
-                        if old["status"] == "pending" and new["status"] == "in_progress"
-                    ]
-                    if len(started) != 1:
-                        raise ValueError("Supervisor 작업 시작 상태를 확인할 수 없습니다.")
-                    active_task_id = started[0]["id"]
-                    previous_tasks = tasks
-                    yield TaskStartedEvent(
-                        task_id=active_task_id, agent_name=started[0]["agent"]
-                    )
-                elif node_name == "execute_task":
+                elif node_name in ("execute_research", "execute_writing"):
                     tasks = node_update["tasks"]
                     finished = [
                         new for old, new in zip(previous_tasks, tasks)
-                        if old["status"] == "in_progress"
-                        and new["status"] in ("completed", "failed")
+                        if old["status"] == "pending" and new["status"] in ("completed", "failed")
                     ]
-                    if len(finished) != 1 or finished[0]["id"] != active_task_id:
+                    expected = {
+                        task["id"] for task in previous_tasks
+                        if task["status"] == "pending"
+                        and task["agent"] == ("research" if node_name == "execute_research" else "writing")
+                    }
+                    if {task["id"] for task in finished} != expected or not expected.issubset(active_task_ids):
                         raise ValueError("Supervisor 작업 완료 상태를 확인할 수 없습니다.")
                     previous_tasks = tasks
-                    yield TaskCompletedEvent(
-                        task_id=finished[0]["id"],
-                        status=finished[0]["status"],
-                        result_preview=(finished[0].get("result") or "")[:200] or None,
-                        error_message=finished[0].get("error_message"),
-                    )
-                    active_task_id = None
+                    for task in finished:
+                        yield TaskCompletedEvent(
+                            task_id=task["id"],
+                            status=task["status"],
+                            result_preview=(task.get("result") or "")[:200] or None,
+                            error_message=task.get("error_message"),
+                        )
+                        active_task_ids.remove(task["id"])
                 elif node_name == "finalize":
                     message = node_update["messages"][-1]
                     if not isinstance(message, AIMessage) or not message.text:
@@ -202,7 +212,7 @@ async def convert_supervisor_events(
             )
         return
 
-    if not finalized or active_task_id:
+    if not finalized or active_task_ids:
         yield ErrorEvent(
             code="STREAM_INTERRUPTED",
             message="응답 생성이 완료되지 않았습니다. 일부 결과는 위에 표시되었을 수 있습니다.",

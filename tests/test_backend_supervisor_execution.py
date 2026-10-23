@@ -1,12 +1,13 @@
-"""합성 Sub-Agent로 Supervisor 작업 순서, 상태 전환, 실패를 확인합니다."""
+"""합성 Sub-Agent로 Supervisor 병렬 실행, 상태 전환, 실패를 확인합니다."""
 
+import asyncio
 import unittest
 from unittest.mock import patch
 
+from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableLambda
 from langchain_core.tools import tool
-from langchain_core.language_models.fake_chat_models import FakeListChatModel
 
 from backend.agent.supervisor_graph import build_supervisor_graph
 from backend.error_handling.classification import classify_exception
@@ -24,12 +25,20 @@ def plan(*agents: str) -> dict:
 
 
 class SupervisorExecutionTests(unittest.IsolatedAsyncioTestCase):
-    async def test_sequential_updates_and_writing_context(self) -> None:
+    async def test_research_runs_concurrently_and_writing_receives_all_results(self) -> None:
         calls = []
+        started = set()
+        both_started = asyncio.Event()
 
-        def research(request):
-            calls.append(("research", request["messages"][-1].content))
-            return {"messages": [AIMessage(content=f"조회 결과 {len(calls)}")]}
+        async def research(request):
+            content = request["messages"][-1].content
+            task_number = "1" if "research 작업 1" in content else "2"
+            started.add(task_number)
+            if len(started) == 2:
+                both_started.set()
+            await asyncio.wait_for(both_started.wait(), timeout=1)
+            calls.append(("research", content))
+            return {"messages": [AIMessage(content=f"조회 결과 {task_number}")]}
 
         def writing(request):
             calls.append(("writing", request["messages"][-1].content))
@@ -51,19 +60,17 @@ class SupervisorExecutionTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             [next(iter(update)) for update in updates],
-            ["planning", "start_task", "execute_task", "start_task", "execute_task",
-             "start_task", "execute_task", "finalize"],
+            ["planning", "execute_research", "execute_writing", "finalize"],
         )
         self.assertEqual(
-            [update["start_task"]["tasks"][index]["status"]
-             for index, update in enumerate(updates[1:6:2])],
-            ["in_progress"] * 3,
+            [task["status"] for task in updates[1]["execute_research"]["tasks"]],
+            ["completed", "completed", "pending"],
         )
         self.assertEqual(
-            [update["execute_task"]["tasks"][index]["status"]
-             for index, update in enumerate(updates[2:7:2])],
+            [task["status"] for task in updates[2]["execute_writing"]["tasks"]],
             ["completed"] * 3,
         )
+        self.assertEqual(started, {"1", "2"})
         self.assertEqual([name for name, _ in calls], ["research", "research", "writing"])
         self.assertIn("DB와 네트워크를 비교해 주세요", calls[-1][1])
         self.assertIn("조회 결과 1", calls[-1][1])

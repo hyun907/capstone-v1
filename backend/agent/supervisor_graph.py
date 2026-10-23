@@ -1,5 +1,6 @@
-"""Supervisor가 계획을 만들고 조회·작성 작업을 순서대로 실행하는 그래프."""
+"""Supervisor가 계획을 만들고 독립적인 조회를 동시에 실행하는 그래프."""
 
+import asyncio
 from collections.abc import Sequence
 from typing import Annotated, Literal, NotRequired, TypedDict
 
@@ -11,6 +12,7 @@ from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
@@ -187,54 +189,40 @@ async def build_supervisor_graph(
         ]
         return {"plan": decision.plan, "tasks": tasks, "current_task_index": 0}
 
-    async def start_task_node(state: SupervisorState) -> dict:
-        index = state["current_task_index"]
-        tasks = list(state["tasks"])
-        if not 0 <= index < len(tasks) or tasks[index]["status"] != "pending":
-            raise ValueError("시작할 수 있는 대기 작업이 없습니다.")
-        tasks[index] = {**tasks[index], "status": "in_progress"}
-        return {"tasks": tasks}
-
-    async def execute_task_node(state: SupervisorState) -> dict:
-        index = state["current_task_index"]
-        tasks = list(state["tasks"])
-        if not 0 <= index < len(tasks) or tasks[index]["status"] != "in_progress":
-            raise ValueError("실행 중인 작업이 없습니다.")
-
-        task = tasks[index]
+    def task_request(state: SupervisorState, task: SupervisorTask) -> str:
         latest_user = next(
             message for message in reversed(state["messages"])
             if isinstance(message, HumanMessage)
         )
         if task["agent"] == "research":
-            agent = research_agent
-            request = (
+            return (
                 f"원래 사용자 요청:\n{latest_user.content}\n\n"
                 f"현재 Research 작업:\n{task['description']}"
             )
-        else:
-            agent = writing_agent
-            findings = "\n\n".join(
-                f"- {previous['description']}\n  결과: {previous['result']}"
-                for previous in tasks[:index]
-                if previous["agent"] == "research" and previous["status"] == "completed"
-            )
-            failures = "\n".join(
-                f"- {previous['description']}: {previous['error_message']}"
-                for previous in tasks[:index]
-                if previous["agent"] == "research" and previous["status"] == "failed"
-            )
-            request = (
-                f"원래 사용자 요청:\n{latest_user.content}\n\n"
-                f"Research 결과:\n{findings or '확인된 조회 결과 없음'}\n\n"
-                f"실패한 Research 작업:\n{failures or '없음'}\n\n"
-                "확인되지 않은 정보는 추정하지 말고, 실패한 정보 수집은 사용자에게 알려 주세요.\n\n"
-                f"현재 Writing 작업:\n{task['description']}"
-            )
+        findings = "\n\n".join(
+            f"- {previous['description']}\n  결과: {previous['result']}"
+            for previous in state["tasks"]
+            if previous["agent"] == "research" and previous["status"] == "completed"
+        )
+        failures = "\n".join(
+            f"- {previous['description']}: {previous['error_message']}"
+            for previous in state["tasks"]
+            if previous["agent"] == "research" and previous["status"] == "failed"
+        )
+        return (
+            f"원래 사용자 요청:\n{latest_user.content}\n\n"
+            f"Research 결과:\n{findings or '확인된 조회 결과 없음'}\n\n"
+            f"실패한 Research 작업:\n{failures or '없음'}\n\n"
+            "확인되지 않은 정보는 추정하지 말고, 실패한 정보 수집은 사용자에게 알려 주세요.\n\n"
+            f"현재 Writing 작업:\n{task['description']}"
+        )
 
+    async def run_task(state: SupervisorState, task: SupervisorTask) -> SupervisorTask:
+        agent = research_agent if task["agent"] == "research" else writing_agent
         try:
             result = await agent.ainvoke(
-                {"messages": [*state["messages"], HumanMessage(content=request)]}
+                {"messages": [*state["messages"], HumanMessage(content=task_request(state, task))]},
+                config={"metadata": {"supervisor_task_id": task["id"]}},
             )
             response = result["messages"][-1]
             if not isinstance(response, AIMessage) or not isinstance(response.content, str):
@@ -242,9 +230,9 @@ async def build_supervisor_graph(
             result_text = response.content.strip()
             if not result_text:
                 raise ValueError("Sub-Agent가 빈 답변을 반환했습니다.")
-            tasks[index] = {**task, "status": "completed", "result": result_text}
+            return {**task, "status": "completed", "result": result_text}
         except ToolError as exc:
-            tasks[index] = {
+            return {
                 **task,
                 "status": "failed",
                 "result": None,
@@ -256,20 +244,39 @@ async def build_supervisor_graph(
                 exc, layer=ErrorLayer.ORCHESTRATION,
                 operation="response" if task["agent"] == "writing" else None,
             )
-            tasks[index] = {
+            return {
                 **task,
                 "status": "failed",
                 "result": None,
                 "error_code": error.code,
                 "error_message": error.user_message or "작업을 처리하지 못했습니다.",
             }
-        return {"tasks": tasks, "current_task_index": index + 1}
+    async def execute_all_research_tasks_node(state: SupervisorState) -> dict:
+        tasks = list(state["tasks"])
+        indices = [index for index, task in enumerate(tasks) if task["agent"] == "research"]
+        writer = get_stream_writer()
+        for index in indices:
+            if tasks[index]["status"] != "pending":
+                raise ValueError("시작할 수 있는 대기 작업이 없습니다.")
+            tasks[index] = {**tasks[index], "status": "in_progress"}
+            writer({"kind": "task_started", "task_id": tasks[index]["id"], "agent": "research"})
 
-    def route_after_execution(state: SupervisorState) -> Literal["start_task", "finalize"]:
+        results = await asyncio.gather(*(run_task(state, tasks[index]) for index in indices))
+        for index, result in zip(indices, results):
+            tasks[index] = result
+        return {"tasks": tasks, "current_task_index": len(tasks) - 1}
+
+    async def execute_writing_task_node(state: SupervisorState) -> dict:
         index = state["current_task_index"]
-        if index < len(state["tasks"]):
-            return "start_task"
-        return "finalize"
+        tasks = list(state["tasks"])
+        if index != len(tasks) - 1 or tasks[index]["agent"] != "writing":
+            raise ValueError("마지막 Writing 작업을 찾지 못했습니다.")
+        if tasks[index]["status"] != "pending":
+            raise ValueError("시작할 수 있는 대기 작업이 없습니다.")
+        tasks[index] = {**tasks[index], "status": "in_progress"}
+        get_stream_writer()({"kind": "task_started", "task_id": tasks[index]["id"], "agent": "writing"})
+        tasks[index] = await run_task(state, tasks[index])
+        return {"tasks": tasks, "current_task_index": index + 1}
 
     async def finalize_node(state: SupervisorState) -> dict:
         tasks = state["tasks"]
@@ -304,13 +311,13 @@ async def build_supervisor_graph(
 
     workflow = StateGraph(SupervisorState)
     workflow.add_node("planning", planning_node)
-    workflow.add_node("start_task", start_task_node)
-    workflow.add_node("execute_task", execute_task_node)
+    workflow.add_node("execute_research", execute_all_research_tasks_node)
+    workflow.add_node("execute_writing", execute_writing_task_node)
     workflow.add_node("finalize", finalize_node)
     workflow.add_edge(START, "planning")
-    workflow.add_edge("planning", "start_task")
-    workflow.add_edge("start_task", "execute_task")
-    workflow.add_conditional_edges("execute_task", route_after_execution)
+    workflow.add_edge("planning", "execute_research")
+    workflow.add_edge("execute_research", "execute_writing")
+    workflow.add_edge("execute_writing", "finalize")
     workflow.add_edge("finalize", END)
     return workflow.compile(checkpointer=checkpointer or MemorySaver()).with_config(
         {"recursion_limit": SUPERVISOR_RECURSION_LIMIT}
