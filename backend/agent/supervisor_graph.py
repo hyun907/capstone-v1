@@ -13,13 +13,14 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from backend.agent.graph import READ_ONLY_TOOL_NAMES
 from backend.agent.mcp_client import create_mcp_client
 from backend.config import AppSettings
 
 MAX_TASKS = 6
+MAX_PLANNING_ATTEMPTS = 2
 SUPERVISOR_RECURSION_LIMIT = 2 * MAX_TASKS + 6
 
 PLANNING_PROMPT = """당신은 ICT 운영 지원 Supervisor입니다.
@@ -138,9 +139,26 @@ async def build_supervisor_graph(
         if not messages or not isinstance(messages[-1], HumanMessage):
             raise ValueError("계획을 만들려면 마지막 메시지가 사용자 질문이어야 합니다.")
 
-        decision = PlanningDecision.model_validate(
-            await planner.ainvoke([SystemMessage(content=PLANNING_PROMPT), *messages])
-        )
+        planning_messages = [SystemMessage(content=PLANNING_PROMPT), *messages]
+        for attempt in range(MAX_PLANNING_ATTEMPTS):
+            try:
+                decision = PlanningDecision.model_validate(
+                    await planner.ainvoke(planning_messages)
+                )
+                break
+            except ValidationError:
+                if attempt == MAX_PLANNING_ATTEMPTS - 1:
+                    raise
+                planning_messages = [
+                    *planning_messages,
+                    HumanMessage(
+                        content=(
+                            "앞선 계획이 형식 규칙을 위반했습니다. "
+                            "최대 6개 작업으로 다시 작성하고, research 작업을 먼저 배치한 뒤 "
+                            "마지막에 writing 작업을 정확히 하나만 두세요."
+                        )
+                    ),
+                ]
         tasks: list[SupervisorTask] = [
             {
                 "id": f"task_{index}",

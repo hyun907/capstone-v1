@@ -6,7 +6,11 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableLambda
 from pydantic import ValidationError
 
-from backend.agent.supervisor_graph import MAX_TASKS, build_supervisor_graph
+from backend.agent.supervisor_graph import (
+    MAX_PLANNING_ATTEMPTS,
+    MAX_TASKS,
+    build_supervisor_graph,
+)
 
 
 def make_plan(*agents: str) -> dict:
@@ -99,6 +103,25 @@ class SupervisorPlanningTests(unittest.IsolatedAsyncioTestCase):
                         {"messages": [{"role": "user", "content": "질문"}]},
                         {"configurable": {"thread_id": name}},
                     )
+
+    async def test_invalid_plan_retries_once_then_uses_valid_plan(self) -> None:
+        calls = []
+
+        def planner(messages):
+            calls.append(messages)
+            return make_plan("writing", "research") if len(calls) == 1 else make_plan("research", "writing")
+
+        graph = await build_supervisor_graph(
+            planner=RunnableLambda(planner), **self.make_agents()
+        )
+        result = await graph.ainvoke(
+            {"messages": [{"role": "user", "content": "장애 대응 절차"}]},
+            {"configurable": {"thread_id": "planner-retry"}},
+        )
+
+        self.assertEqual(len(calls), MAX_PLANNING_ATTEMPTS)
+        self.assertIn("writing 작업을 정확히 하나", calls[1][-1].content)
+        self.assertEqual([task["agent"] for task in result["tasks"]], ["research", "writing"])
 
     async def test_planning_requires_a_new_user_message(self) -> None:
         graph = await build_supervisor_graph(
