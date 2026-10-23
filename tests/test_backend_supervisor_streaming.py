@@ -69,6 +69,8 @@ class SupervisorStreamTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(events[4].result), 200)
         self.assertEqual(events[5].task_id, "task_1")
         self.assertEqual(events[8].task_id, "task_2")
+        self.assertEqual([event.status for event in events if event.type == "task_completed"],
+                         ["completed", "completed"])
         self.assertEqual(events[-2].content, "최종 답변")
         self.assertEqual(events[-1].thread_id, "thread-a")
         frame = format_sse(events[3])
@@ -82,7 +84,8 @@ class SupervisorStreamTests(unittest.IsolatedAsyncioTestCase):
 
         events = [event async for event in convert_supervisor_events(broken_stream(), "thread-b")]
         self.assertEqual([event.type for event in events], ["plan_created", "task_list_created", "error"])
-        self.assertEqual(events[-1].code, "STREAM_FAILED")
+        self.assertEqual(events[-1].code, "STREAM_INTERRUPTED")
+        self.assertTrue(events[-1].recoverable)
         self.assertNotIn("private upstream detail", events[-1].message)
 
     async def test_incomplete_graph_never_emits_done(self) -> None:
@@ -91,6 +94,32 @@ class SupervisorStreamTests(unittest.IsolatedAsyncioTestCase):
 
         events = [event async for event in convert_supervisor_events(incomplete_stream(), "thread-c")]
         self.assertEqual([event.type for event in events], ["plan_created", "task_list_created", "error"])
+
+    async def test_failed_task_emits_status_then_next_task_and_done(self) -> None:
+        pending = [task("task_1", "research", "pending"), task("task_2", "writing", "pending")]
+        first_running = [task("task_1", "research", "in_progress"), pending[1]]
+        first_failed = [{**task("task_1", "research", "failed"),
+                         "error_message": "도구 사용 중 문제가 발생했습니다."}, pending[1]]
+        second_running = [first_failed[0], task("task_2", "writing", "in_progress")]
+        final = [first_failed[0], task("task_2", "writing", "completed", "부분 답변")]
+
+        async def graph_stream():
+            yield (), "updates", {"planning": {"plan": "계획", "tasks": pending}}
+            yield (), "updates", {"start_task": {"tasks": first_running}}
+            yield (), "updates", {"execute_task": {"tasks": first_failed}}
+            yield (), "updates", {"start_task": {"tasks": second_running}}
+            yield (), "updates", {"execute_task": {"tasks": final}}
+            yield (), "updates", {"finalize": {"messages": [AIMessage(content="부분 답변")]}}
+
+        events = [event async for event in convert_supervisor_events(graph_stream(), "thread-failed")]
+        self.assertEqual([event.type for event in events],
+                         ["plan_created", "task_list_created", "task_started", "task_completed",
+                          "task_started", "task_completed", "token", "done"])
+        self.assertEqual(events[3].status, "failed")
+        self.assertIsNone(events[3].result_preview)
+        self.assertEqual(events[3].error_message, "도구 사용 중 문제가 발생했습니다.")
+        self.assertEqual(events[5].status, "completed")
+        self.assertEqual(events[-1].thread_id, "thread-failed")
 
 
 if __name__ == "__main__":

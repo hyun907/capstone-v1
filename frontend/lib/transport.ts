@@ -17,7 +17,7 @@ function isSupervisorTask(value: unknown): value is SupervisorTask {
     typeof value.id === "string" &&
     typeof value.description === "string" &&
     isAgent(value.agent) &&
-    (value.status === "pending" || value.status === "in_progress" || value.status === "completed") &&
+    (value.status === "pending" || value.status === "in_progress" || value.status === "completed" || value.status === "failed") &&
     (typeof value.result === "string" || value.result === null);
 }
 
@@ -58,10 +58,13 @@ function parseEvent(frame: string): StreamEvent | null {
       if (
         (value.code === "API_CREDIT_EXHAUSTED" ||
           value.code === "MODEL_RATE_LIMIT" ||
-          value.code === "STREAM_FAILED") &&
-        typeof value.message === "string"
+          value.code === "STREAM_FAILED" ||
+          value.code === "STREAM_INTERRUPTED") &&
+        typeof value.message === "string" &&
+        (typeof value.recoverable === "boolean" || value.recoverable === undefined)
       ) {
-        return { type: "error", code: value.code, message: value.message };
+        return { type: "error", code: value.code, message: value.message,
+          recoverable: value.recoverable ?? false };
       }
       break;
     case "plan_created":
@@ -79,8 +82,12 @@ function parseEvent(frame: string): StreamEvent | null {
       break;
     case "task_completed":
       if (typeof value.task_id === "string" &&
-        (typeof value.result_preview === "string" || value.result_preview === null)) {
-        return { type: "task_completed", task_id: value.task_id, result_preview: value.result_preview };
+        (value.status === "completed" || value.status === "failed" || value.status === undefined) &&
+        (typeof value.result_preview === "string" || value.result_preview === null) &&
+        (typeof value.error_message === "string" || value.error_message === null || value.error_message === undefined)) {
+        return { type: "task_completed", task_id: value.task_id,
+          status: value.status ?? "completed", result_preview: value.result_preview,
+          error_message: value.error_message ?? null };
       }
       break;
     case "sub_agent_token":
