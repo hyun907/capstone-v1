@@ -9,17 +9,18 @@ from langsmith import aevaluate
 from langsmith.utils import LangSmithAuthError, LangSmithError
 
 from backend.eval.create_dataset import DATASET_NAME, dataset_examples
-from backend.eval.evaluators import has_expected_topics, task_structure
+from backend.eval.evaluators import expected_tool_calls, has_expected_topics, task_structure
 from backend.eval.judge import build_plan_and_task_judges, build_response_quality_judge
 from backend.eval.target import build_target
 
-EXPERIMENT_PREFIX = "supervisor-v2"
+EXPERIMENT_PREFIX = "supervisor-v3"
 EXPECTED_FEEDBACK_KEYS = {
     "has_expected_topics",
     "response_quality",
     "task_structure",
     "plan_quality",
     "task_decomposition_quality",
+    "expected_tool_calls",
 }
 
 
@@ -49,7 +50,7 @@ def validate_rows(rows: Iterable[dict[str, Any]]) -> int:
 
 
 async def run_evaluation() -> str:
-    """직접 호출 Target과 다섯 평가 지표로 데이터셋을 실행합니다."""
+    """직접 호출 Target과 여섯 평가 지표로 데이터셋을 실행합니다."""
     for key in ("LANGSMITH_API_KEY", "OPENAI_API_KEY"):
         if not os.getenv(key, "").strip():
             raise RuntimeError(f"{key}를 설정한 뒤 평가를 실행하세요.")
@@ -66,9 +67,10 @@ async def run_evaluation() -> str:
                 task_structure,
                 plan_quality_judge,
                 task_decomposition_judge,
+                expected_tool_calls,
             ],
             experiment_prefix=EXPERIMENT_PREFIX,
-            description="ICT 운영 Supervisor 응답·계획·Task 분해 평가",
+            description="ICT 운영 Supervisor 응답·계획·Task·Tool 호출 평가",
             max_concurrency=2,
         )
         location = results.url or str(results.experiment_id)

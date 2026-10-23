@@ -22,6 +22,7 @@
 | [`test_backend_eval_runner.py`](test_backend_eval_runner.py) | Experiment 실행 설정과 누락 점수 감지 |
 | [`test_backend_eval_task_structure.py`](test_backend_eval_task_structure.py) | Task 개수·Writing 순서·인사 과분해·중복 규칙 |
 | [`test_backend_eval_plan_task_judge.py`](test_backend_eval_plan_task_judge.py) | 계획과 Task Judge의 입력 분리·점수 계약 |
+| [`test_backend_eval_tool_calls.py`](test_backend_eval_tool_calls.py) | 실제 Tool 이름과 기대 목록의 일치·누락·추가 점수 |
 
 프로젝트 루트에서 의존성을 설치하고 전체 테스트를 실행합니다.
 
