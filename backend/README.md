@@ -9,14 +9,14 @@ POST /chat → ChatRequest 검사 → thread_id 준비 → Agent 실행
            → 이번 질문의 마지막 답변과 도구 호출 추출 → ChatResponse 반환
 ```
 
-1. [`main.py`](main.py)의 `lifespan()`이 서버 시작 시 단일 Agent와 Supervisor를 각각 한 번 만듭니다. 이때 MCP 도구도 찾습니다.
+1. [`main.py`](main.py)의 `lifespan()`이 PostgreSQL checkpointer를 열고 단일 Agent와 Supervisor를 각각 한 번 만듭니다. 이때 MCP 도구도 찾습니다.
 2. `chat()`은 질문과 `thread_id`를 받습니다. ID를 생략하면 새 UUID를 만듭니다.
 3. Agent에 질문을 전달한 뒤, **이번 요청**에서 나온 마지막 AI 답변과 도구 호출만 응답에 담습니다.
-4. 같은 `thread_id`로 다시 요청하면 같은 서버 프로세스의 대화 메모리를 사용합니다. 서버를 재시작하면 이 메모리는 사라집니다.
+4. 같은 `thread_id`로 다시 요청하면 PostgreSQL에 저장된 대화를 이어갑니다. 서버 재시작이나 다른 인스턴스에서도 같은 ID를 사용할 수 있습니다.
 
 `GET /health`는 준비된 서버에서 `{"status":"ok"}`를 반환합니다. Agent나 도구 실행이 실패하면 현재 `/chat` 요청은 HTTP 500으로 끝납니다.
 
-`POST /chat/stream`은 단일 Agent의 토큰·도구 진행을 SSE로 보내고, `POST /chat/supervisor/stream`은 계획·Task 상태·Sub-Agent 진행·최종 답변을 SSE로 보냅니다. 두 스트리밍 경로는 `ChatRequest`를 사용하며, 실패하면 `error` 이벤트를 보냅니다. 대화 기록은 프로세스 메모리에만 남습니다.
+`POST /chat/stream`은 단일 Agent의 토큰·도구 진행을 SSE로 보내고, `POST /chat/supervisor/stream`은 계획·Task 상태·Sub-Agent 진행·최종 답변을 SSE로 보냅니다. 두 스트리밍 경로는 `ChatRequest`를 사용하며, 실패하면 `error` 이벤트를 보냅니다. 대화 상태는 PostgreSQL에 저장됩니다.
 
 ## 파일과 다음 읽을 곳
 
@@ -27,9 +27,10 @@ POST /chat → ChatRequest 검사 → thread_id 준비 → Agent 실행
 | [`schemas/`](schemas/README.md) | 요청과 응답의 데이터 모양 |
 | [`agent/`](agent/README.md) | LLM, 도구, 대화 메모리를 연결한 Agent |
 | [`streaming/`](streaming/README.md) | LangGraph 이벤트를 SSE 이벤트로 변환 |
+| [`persistence/`](persistence/checkpointer.py) | PostgreSQL checkpointer 생성과 연결 정리 |
 | [`eval/`](eval/README.md) | Supervisor 평가 데이터셋과 LangSmith Experiment 실행 |
 
-프로젝트 루트에서 `uv run --locked --extra backend uvicorn backend.main:app`으로 실행합니다. 실제 모델 호출에는 `OPENAI_API_KEY`가 필요합니다. 외부 호출 없이 HTTP 계약을 확인하려면 [Backend 테스트](../tests/README.md)를 사용하세요.
+프로젝트 루트에서 `docker compose up -d postgres` 후 `uv run --env-file backend/.env --locked --extra backend uvicorn backend.main:app`으로 실행합니다. 실제 모델 호출에는 `OPENAI_API_KEY`가 필요합니다. 외부 호출 없이 HTTP 계약을 확인하려면 [Backend 테스트](../tests/README.md)를 사용하세요.
 
 Next.js 화면에서 단일 Agent와 Supervisor 모드를 선택할 수 있습니다.
 
@@ -59,13 +60,14 @@ cat > mcp-server/data/monitoring.json <<'EOF'
 EOF
 ```
 
-`backend/.env.trace`를 이 임시 디렉터리에 직접 만들고 아래 **변수 이름**에 본인의 키를 넣습니다. 이 파일은 Git에서 제외되며, Jira 설정은 넣지 않아 mock 검색을 사용합니다. 키가 여러 LangSmith workspace에 연결되어 있다면 `LANGSMITH_WORKSPACE_ID`도 설정합니다. 미국 외 리전이면 계정의 `LANGSMITH_ENDPOINT`를 추가합니다.
+`backend/.env.trace`를 이 임시 디렉터리에 직접 만들고 아래 **변수 이름**에 본인의 키와 PostgreSQL 접속 URL을 넣습니다. 프로젝트 루트의 `docker compose up -d postgres`로 DB를 먼저 실행합니다. 이 파일은 Git에서 제외되며, Jira 설정은 넣지 않아 mock 검색을 사용합니다. 키가 여러 LangSmith workspace에 연결되어 있다면 `LANGSMITH_WORKSPACE_ID`도 설정합니다. 미국 외 리전이면 계정의 `LANGSMITH_ENDPOINT`를 추가합니다.
 
 ```text
 OPENAI_API_KEY=<본인의 OpenAI 키>
 LANGSMITH_API_KEY=<본인의 LangSmith 키>
 LANGSMITH_TRACING=true
 LANGSMITH_PROJECT=capstone-observability
+DATABASE_URL=<개인 PostgreSQL 접속 URL>
 ```
 
 첫 번째 터미널에서 Backend를 실행하고, 두 번째 터미널에서 과제 질문을 한 번 보냅니다. 기존 셸의 Jira 설정을 제거한 채 실행해야 mock 검색을 유지할 수 있습니다. `uv`의 환경 파일보다 셸 변수가 우선할 수 있으므로 키와 추적 변수도 셸에서 제거한 뒤 전용 파일을 읽습니다.

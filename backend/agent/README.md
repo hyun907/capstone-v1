@@ -9,14 +9,14 @@ Agent는 질문에 답할 때 필요한 조회 도구를 LLM이 선택하도록 
 1. MCP 서버에서 도구를 가져옵니다. [`mcp_client.py`](mcp_client.py)가 로컬 서버를 stdio subprocess로 연결합니다.
 2. 조회용 도구 `get_monitoring_status`, `search_operations_manual`, `search_jira_tickets`만 골라 LLM에 연결합니다. `create_jira_ticket`은 채팅 Agent에 주지 않습니다.
 3. `SYSTEM_PROMPT`로 도구 사용 기준과 실습용 mock 데이터의 설명 방식을 알려줍니다.
-4. LangChain의 `create_agent()`로 LangGraph 기반 Agent를 만들고 `MemorySaver`를 붙입니다. 코드에서 노드와 연결선을 직접 정의하지는 않습니다.
+4. LangChain의 `create_agent()`로 LangGraph 기반 Agent를 만들고 주입받은 checkpointer를 붙입니다. 코드에서 노드와 연결선을 직접 정의하지는 않습니다.
 5. `recursion_limit=12`를 적용해 도구 호출이 계속 반복되는 상황을 제한합니다.
 
 실행 흐름은 `질문 → LLM 판단 → 필요하면 도구 호출 → 도구 결과를 보고 답변`입니다. 도구 호출이 필요 없으면 바로 답할 수도 있습니다. Agent는 답변 문장뿐 아니라 대화 메시지 목록을 반환하고, [`main.py`](../main.py)가 그중 이번 요청에 필요한 내용을 추립니다.
 
 ## 대화 메모리
 
-`MemorySaver`는 `configurable.thread_id`를 기준으로 대화를 구분합니다. 같은 서버 프로세스에서 같은 ID를 다시 보내야 이전 대화를 이어 볼 수 있습니다. PostgreSQL 같은 영구 저장은 아직 없습니다.
+Backend는 `AsyncPostgresSaver`를 두 그래프에 주입합니다. `configurable.thread_id`가 같으면 재시작하거나 다른 서버 인스턴스로 요청해도 이전 대화를 이어 볼 수 있습니다. 그래프 빌더를 직접 호출하면서 checkpointer를 생략한 경우에만 `MemorySaver`를 사용합니다.
 
 MCP 조회 도구의 timeout은 최대 두 번 재시도한 뒤 `ToolError`로 전파합니다. 다른 실행 오류는 즉시 `ToolError`로 전파하며, 단일 Agent 호출자는 기존처럼 실패를 받습니다. 생성 도구는 중복 쓰기를 막기 위해 재시도 대상에서 제외합니다. 도구 목록을 찾는 시작 단계의 실패는 호출 실패와 구분해 그대로 전파합니다. 관련 동작은 [`test_backend_tool_retry.py`](../../tests/test_backend_tool_retry.py)와 [`test_backend_mcp_client.py`](../../tests/test_backend_mcp_client.py)에서 확인합니다.
 
