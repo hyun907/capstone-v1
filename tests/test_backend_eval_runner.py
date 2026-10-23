@@ -30,10 +30,10 @@ class FakeExperimentResults:
 
 
 class EvalRunnerTests(unittest.IsolatedAsyncioTestCase):
-    async def test_runs_five_examples_with_five_evaluators(self) -> None:
+    async def test_runs_five_examples_with_six_evaluators(self) -> None:
         keys = (
             "has_expected_topics", "response_quality", "task_structure",
-            "plan_quality", "task_decomposition_quality",
+            "plan_quality", "task_decomposition_quality", "expected_tool_calls",
         )
         rows = [result_row(*keys) for _ in range(5)]
         with patch.dict(os.environ, {"LANGSMITH_API_KEY": "fake", "OPENAI_API_KEY": "fake"}), patch(
@@ -51,8 +51,8 @@ class EvalRunnerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(location, FakeExperimentResults.url)
         self.assertEqual(evaluate.await_args.kwargs["data"], "capstone-ict-operations")
         self.assertEqual(evaluate.await_args.kwargs["max_concurrency"], 2)
-        self.assertEqual(len(evaluate.await_args.kwargs["evaluators"]), 5)
-        self.assertEqual(evaluate.await_args.kwargs["experiment_prefix"], "supervisor-v2")
+        self.assertEqual(len(evaluate.await_args.kwargs["evaluators"]), 6)
+        self.assertEqual(evaluate.await_args.kwargs["experiment_prefix"], "supervisor-v3")
 
     async def test_missing_key_stops_before_graph_build(self) -> None:
         with patch.dict(os.environ, {"LANGSMITH_API_KEY": ""}), patch(
@@ -63,8 +63,8 @@ class EvalRunnerTests(unittest.IsolatedAsyncioTestCase):
         build.assert_not_awaited()
 
     def test_missing_score_is_failure(self) -> None:
-        rows = [result_row("has_expected_topics", "response_quality", "task_structure", "plan_quality") for _ in range(5)]
-        with self.assertRaisesRegex(RuntimeError, "task_decomposition_quality"):
+        rows = [result_row("has_expected_topics", "response_quality", "task_structure", "plan_quality", "task_decomposition_quality") for _ in range(5)]
+        with self.assertRaisesRegex(RuntimeError, "expected_tool_calls"):
             validate_rows(rows)
 
     def test_failed_run_is_failure(self) -> None:

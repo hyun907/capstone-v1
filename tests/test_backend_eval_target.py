@@ -4,8 +4,9 @@ import unittest
 from unittest.mock import AsyncMock
 
 from langchain_core.messages import AIMessage
+from langchain_core.tools import tool
 
-from backend.eval.target import make_target
+from backend.eval.target import ToolCallRecorder, make_target
 
 
 class EvalTargetTests(unittest.IsolatedAsyncioTestCase):
@@ -24,6 +25,7 @@ class EvalTargetTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first["response"], "진단 후 복구합니다.")
         self.assertEqual(first["plan"], "상태를 확인하고 답변합니다.")
         self.assertEqual(first["tasks"][0]["id"], "task_1")
+        self.assertEqual(first["tools_used"], [])
         self.assertEqual(second, first)
         first_call, second_call = graph.ainvoke.await_args_list
         self.assertEqual(first_call.args[0]["messages"][0].content, "첫 질문")
@@ -31,6 +33,22 @@ class EvalTargetTests(unittest.IsolatedAsyncioTestCase):
         first_thread = first_call.kwargs["config"]["configurable"]["thread_id"]
         second_thread = second_call.kwargs["config"]["configurable"]["thread_id"]
         self.assertNotEqual(first_thread, second_thread)
+        self.assertIsNot(first_call.kwargs["config"]["callbacks"][0], second_call.kwargs["config"]["callbacks"][0])
+
+    async def test_records_real_tool_start_name_without_args_or_results(self) -> None:
+        @tool
+        def search_operations_manual(query: str) -> str:
+            """합성 매뉴얼 검색."""
+            return f"secret result for {query}"
+
+        recorder = ToolCallRecorder()
+        await search_operations_manual.ainvoke(
+            {"query": "secret input"},
+            config={"callbacks": [recorder]},
+        )
+
+        self.assertEqual(recorder.names, ["search_operations_manual"])
+        self.assertNotIn("secret", repr(recorder.names))
 
     async def test_rejects_bad_input_before_calling_graph(self) -> None:
         graph = AsyncMock()

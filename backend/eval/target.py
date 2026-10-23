@@ -2,12 +2,31 @@
 
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
+from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import Runnable
 
 from backend.agent.supervisor_graph import build_supervisor_graph
+
+
+class ToolCallRecorder(AsyncCallbackHandler):
+    """Tool 시작 이벤트의 이름만 보관하고 인자와 결과는 보관하지 않습니다."""
+
+    def __init__(self) -> None:
+        self.names: list[str] = []
+
+    async def on_tool_start(
+        self,
+        serialized: dict[str, Any],
+        input_str: str,
+        *,
+        run_id: UUID,
+        **kwargs: Any,
+    ) -> None:
+        name = kwargs.get("name") or serialized.get("name")
+        self.names.append(name if isinstance(name, str) and name else "<unnamed>")
 
 
 def make_target(graph: Runnable) -> Callable[[Mapping[str, object]], Awaitable[dict[str, Any]]]:
@@ -18,9 +37,10 @@ def make_target(graph: Runnable) -> Callable[[Mapping[str, object]], Awaitable[d
         if not isinstance(message, str) or not message.strip():
             raise ValueError("평가 입력에는 비어 있지 않은 message가 필요합니다.")
 
+        recorder = ToolCallRecorder()
         result = await graph.ainvoke(
             {"messages": [HumanMessage(content=message)]},
-            config={"configurable": {"thread_id": str(uuid4())}},
+            config={"configurable": {"thread_id": str(uuid4())}, "callbacks": [recorder]},
         )
         if not isinstance(result, dict):
             raise ValueError("Supervisor가 상태를 반환하지 않았습니다.")
@@ -41,7 +61,12 @@ def make_target(graph: Runnable) -> Callable[[Mapping[str, object]], Awaitable[d
         if not isinstance(tasks, list) or not tasks:
             raise ValueError("Supervisor의 Task 목록이 없습니다.")
 
-        return {"response": final_message.content, "plan": plan, "tasks": tasks}
+        return {
+            "response": final_message.content,
+            "plan": plan,
+            "tasks": tasks,
+            "tools_used": recorder.names,
+        }
 
     return target_function
 
