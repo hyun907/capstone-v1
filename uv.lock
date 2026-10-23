@@ -125,6 +125,7 @@ backend = [
     { name = "langchain-mcp-adapters" },
     { name = "langchain-openai" },
     { name = "langgraph" },
+    { name = "langsmith" },
     { name = "pydantic-settings" },
     { name = "uvicorn" },
 ]
@@ -142,6 +143,7 @@ requires-dist = [
     { name = "langchain-mcp-adapters", marker = "extra == 'backend'", specifier = ">=0.1.12,<1" },
     { name = "langchain-openai", marker = "extra == 'backend'", specifier = ">=1,<2" },
     { name = "langgraph", marker = "extra == 'backend'", specifier = ">=1,<2" },
+    { name = "langsmith", marker = "extra == 'backend'", specifier = ">=0.14,<1" },
     { name = "pydantic", specifier = "==2.11.7" },
     { name = "pydantic-settings", marker = "extra == 'backend'", specifier = ">=2,<3" },
     { name = "uvicorn", marker = "extra == 'backend'", specifier = ">=0.34,<1" },
