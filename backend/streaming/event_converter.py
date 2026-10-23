@@ -156,16 +156,19 @@ async def convert_supervisor_events(
                     )
                 elif node_name == "execute_task":
                     tasks = node_update["tasks"]
-                    completed = [
+                    finished = [
                         new for old, new in zip(previous_tasks, tasks)
-                        if old["status"] == "in_progress" and new["status"] == "completed"
+                        if old["status"] == "in_progress"
+                        and new["status"] in ("completed", "failed")
                     ]
-                    if len(completed) != 1 or completed[0]["id"] != active_task_id:
+                    if len(finished) != 1 or finished[0]["id"] != active_task_id:
                         raise ValueError("Supervisor 작업 완료 상태를 확인할 수 없습니다.")
                     previous_tasks = tasks
                     yield TaskCompletedEvent(
-                        task_id=completed[0]["id"],
-                        result_preview=(completed[0]["result"] or "")[:200],
+                        task_id=finished[0]["id"],
+                        status=finished[0]["status"],
+                        result_preview=(finished[0].get("result") or "")[:200] or None,
+                        error_message=finished[0].get("error_message"),
                     )
                     active_task_id = None
                 elif node_name == "finalize":
@@ -183,23 +186,27 @@ async def convert_supervisor_events(
                 yield ErrorEvent(
                     code="API_CREDIT_EXHAUSTED",
                     message="OpenAI API 크레딧이 소진되었습니다. API 결제 설정에서 잔액을 확인해 주세요.",
+                    recoverable=True,
                 )
             else:
                 yield ErrorEvent(
                     code="MODEL_RATE_LIMIT",
                     message="OpenAI 요청 한도에 도달했습니다. 잠시 후 다시 시도해 주세요.",
+                    recoverable=True,
                 )
         else:
             yield ErrorEvent(
-                code="STREAM_FAILED",
-                message="응답 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+                code="STREAM_INTERRUPTED",
+                message="응답 생성 중 오류가 발생했습니다. 일부 결과는 위에 표시되었을 수 있습니다.",
+                recoverable=True,
             )
         return
 
     if not finalized or active_task_id:
         yield ErrorEvent(
-            code="STREAM_FAILED",
-            message="응답 생성이 완료되지 않았습니다. 다시 시도해 주세요.",
+            code="STREAM_INTERRUPTED",
+            message="응답 생성이 완료되지 않았습니다. 일부 결과는 위에 표시되었을 수 있습니다.",
+            recoverable=True,
         )
         return
     yield DoneEvent(thread_id=thread_id)

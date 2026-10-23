@@ -33,8 +33,11 @@ class DoneEvent(StreamEvent):
 
 class ErrorEvent(StreamEvent):
     type: Literal["error"] = "error"
-    code: Literal["API_CREDIT_EXHAUSTED", "MODEL_RATE_LIMIT", "STREAM_FAILED"]
+    code: Literal[
+        "API_CREDIT_EXHAUSTED", "MODEL_RATE_LIMIT", "STREAM_FAILED", "STREAM_INTERRUPTED"
+    ]
     message: str
+    recoverable: bool = False
 
 
 class PlanCreatedEvent(StreamEvent):
@@ -56,7 +59,9 @@ class TaskStartedEvent(StreamEvent):
 class TaskCompletedEvent(StreamEvent):
     type: Literal["task_completed"] = "task_completed"
     task_id: str
+    status: Literal["completed", "failed"]
     result_preview: str | None = None
+    error_message: str | None = None
 
 
 class SubAgentTokenEvent(StreamEvent):

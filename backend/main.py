@@ -132,14 +132,24 @@ async def chat_supervisor_stream(payload: ChatRequest, request: Request) -> Stre
     thread_id = payload.thread_id or str(uuid4())
 
     async def event_generator() -> AsyncIterator[str]:
-        graph_stream = request.app.state.supervisor_graph.astream(
-            {"messages": [{"role": "user", "content": payload.message}]},
-            {"configurable": {"thread_id": thread_id}},
-            stream_mode=["messages", "updates"],
-            subgraphs=True,
-        )
-        async for event in convert_supervisor_events(graph_stream, thread_id):
-            yield format_sse(event)
+        try:
+            graph_stream = request.app.state.supervisor_graph.astream(
+                {"messages": [{"role": "user", "content": payload.message}]},
+                {"configurable": {"thread_id": thread_id}},
+                stream_mode=["messages", "updates"],
+                subgraphs=True,
+            )
+            async for event in convert_supervisor_events(graph_stream, thread_id):
+                yield format_sse(event)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("Supervisor SSE 전송 실패: %s", type(exc).__name__)
+            yield format_sse(ErrorEvent(
+                code="STREAM_INTERRUPTED",
+                message="응답 생성 중 오류가 발생했습니다. 일부 결과는 위에 표시되었을 수 있습니다.",
+                recoverable=True,
+            ))
 
     return StreamingResponse(
         event_generator(),

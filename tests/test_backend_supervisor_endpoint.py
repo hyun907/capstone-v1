@@ -79,7 +79,7 @@ class SupervisorEndpointTests(unittest.IsolatedAsyncioTestCase):
                     invalid = client.post("/chat/supervisor/stream", json={"message": ""})
                     self.assertEqual(invalid.status_code, 422)
 
-    async def test_agent_failure_becomes_error_without_done(self) -> None:
+    async def test_agent_failure_becomes_failed_task_and_done(self) -> None:
         def fail(_):
             raise RuntimeError("private synthetic failure")
 
@@ -99,9 +99,44 @@ class SupervisorEndpointTests(unittest.IsolatedAsyncioTestCase):
                         "/chat/supervisor/stream", json={"message": "실패 질문"}
                     )
         events = parse_events(response.text)
-        self.assertEqual(events[-1]["type"], "error")
+        self.assertEqual(events[3]["status"], "failed")
+        self.assertEqual(events[5]["status"], "completed")
+        self.assertEqual(events[-1]["type"], "done")
+        self.assertIn("일부 정보 수집에 실패", events[-2]["content"])
         self.assertNotIn("private synthetic failure", response.text)
-        self.assertNotIn("done", [event["type"] for event in events])
+
+    async def test_planning_failure_becomes_error_without_done(self) -> None:
+        def fail(_):
+            raise RuntimeError("private synthetic failure")
+
+        graph = await build_supervisor_graph(
+            planner=RunnableLambda(fail),
+            research_agent=RunnableLambda(lambda _: {"messages": [AIMessage(content="unused")]}),
+            writing_agent=RunnableLambda(lambda _: {"messages": [AIMessage(content="unused")]}),
+        )
+        with patch("backend.main.build_agent", new=AsyncMock(return_value=object())):
+            with patch("backend.main.build_supervisor_graph", new=AsyncMock(return_value=graph)):
+                with TestClient(app) as client:
+                    response = client.post("/chat/supervisor/stream", json={"message": "합성 질문"})
+        events = parse_events(response.text)
+        self.assertEqual([event["type"] for event in events], ["error"])
+        self.assertEqual(events[0]["code"], "STREAM_INTERRUPTED")
+        self.assertTrue(events[0]["recoverable"])
+        self.assertNotIn("private synthetic failure", response.text)
+
+    async def test_stream_creation_failure_becomes_safe_error(self) -> None:
+        class BrokenGraph:
+            def astream(self, *_args, **_kwargs):
+                raise RuntimeError("private synthetic failure")
+
+        with patch("backend.main.build_agent", new=AsyncMock(return_value=object())):
+            with patch("backend.main.build_supervisor_graph", new=AsyncMock(return_value=BrokenGraph())):
+                with TestClient(app) as client:
+                    response = client.post("/chat/supervisor/stream", json={"message": "합성 질문"})
+        events = parse_events(response.text)
+        self.assertEqual([event["type"] for event in events], ["error"])
+        self.assertEqual(events[0]["code"], "STREAM_INTERRUPTED")
+        self.assertNotIn("private synthetic failure", response.text)
 
 
 if __name__ == "__main__":
