@@ -95,6 +95,19 @@ E1에서는 Backend를 시작한 뒤 격리 복사본의 MCP 서버 파일 접�
 
 자동 검증은 프로젝트 루트에서 `uv run --locked --extra backend python -m unittest discover -s tests -q`, `frontend/`에서 `npm test`와 `npm run build`로 실행합니다. 실제 질문에 대한 Task 분해는 모델 출력에 따라 달라질 수 있어 원문 질문만으로 Research 실행이 보장되지는 않습니다. 개인 관찰 캡처와 결과 문서는 공개 저장소에 넣지 않습니다.
 
+## PostgreSQL checkpointer 준비 (A32)
+
+프로젝트 루트의 추적 제외 `.env`에 `POSTGRES_PASSWORD`를 지정합니다. 기본 사용자는 `capstone`, DB는 `capstone_state`, 호스트 포트는 `5432`이며 사용 중인 포트가 있으면 `POSTGRES_PORT`로 바꿀 수 있습니다. Backend의 추적 제외 `backend/.env`에는 같은 접속 정보의 `DATABASE_URL`을 둡니다. 비밀번호나 전체 URL을 Git에 추가하거나 로그에 출력하지 않습니다.
+
+```bash
+docker compose up -d postgres
+docker compose ps
+docker compose exec postgres psql -U capstone -d capstone_state -c '\dt'
+uv run --env-file backend/.env --locked --extra backend python -m unittest discover -s tests -p 'test_backend_checkpointer.py' -v
+```
+
+`backend.persistence.checkpointer.create_checkpointer()`는 연결을 열고 `setup()`으로 테이블을 준비하며 context 종료 시 연결을 닫습니다. 이 준비 단계에서는 아직 Backend lifespan에 연결되지 않았습니다.
+
 ## Cost & Latency 측정 (A31)
 
 최적화 전후 코드의 격리 복사본에 동일한 합성 데이터만 넣고 각각 실행합니다. 실행마다 새 `thread_id`를 사용하며 기본값은 질문 5개를 각 1회 실행합니다. `--repeats N`으로 반복하거나 `--output /tmp/a31-results.json`으로 수치를 저장할 수 있습니다.
