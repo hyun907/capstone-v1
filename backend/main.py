@@ -16,7 +16,10 @@ from backend.agent.graph import build_agent
 from backend.agent.supervisor_graph import build_supervisor_graph
 from backend.schemas.chat import ChatRequest, ChatResponse
 from backend.schemas.stream import ErrorEvent
-from backend.streaming.event_converter import convert_langgraph_events, convert_supervisor_events
+from backend.streaming.event_converter import (
+    convert_langgraph_events,
+    convert_supervisor_events,
+)
 from backend.streaming.sse_formatter import format_sse
 
 logger = logging.getLogger(__name__)
@@ -136,7 +139,7 @@ async def chat_supervisor_stream(payload: ChatRequest, request: Request) -> Stre
             graph_stream = request.app.state.supervisor_graph.astream(
                 {"messages": [{"role": "user", "content": payload.message}]},
                 {"configurable": {"thread_id": thread_id}},
-                stream_mode=["messages", "updates"],
+                stream_mode=["messages", "updates", "custom"],
                 subgraphs=True,
             )
             async for event in convert_supervisor_events(graph_stream, thread_id):
