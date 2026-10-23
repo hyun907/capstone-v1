@@ -94,3 +94,13 @@ O1 제출 전에는 `results.md`의 모든 값과 캡처가 **같은 trace ID**�
 E1에서는 Backend를 시작한 뒤 격리 복사본의 MCP 서버 파일 접근을 막았습니다. 원문 질문은 한 번의 실행에서 Writing Task 하나만 계획해 도구 실패를 재현하지 못했습니다. 매뉴얼 검색을 명시한 재시도에서는 Research가 `failed`, Writing이 `completed`로 끝났으며 실패 카드, 실패 안내가 포함된 최종 답변, `done`을 확인했습니다. LangSmith trace에도 `planning → execute_task` 두 번 → `finalize`가 남았습니다. 그래프 전체는 부분 응답으로 정상 종료되므로 root trace의 성공 표시와 개별 Task 실패를 함께 확인해야 합니다. 테스트 후 파일 권한을 복구했습니다.
 
 자동 검증은 프로젝트 루트에서 `uv run --locked --extra backend python -m unittest discover -s tests -q`, `frontend/`에서 `npm test`와 `npm run build`로 실행합니다. 실제 질문에 대한 Task 분해는 모델 출력에 따라 달라질 수 있어 원문 질문만으로 Research 실행이 보장되지는 않습니다. 개인 관찰 캡처와 결과 문서는 공개 저장소에 넣지 않습니다.
+
+## Cost & Latency 측정 (A31)
+
+최적화 전후 코드의 격리 복사본에 동일한 합성 데이터만 넣고 각각 실행합니다. 실행마다 새 `thread_id`를 사용하며 기본값은 질문 5개를 각 1회 실행합니다. `--repeats N`으로 반복하거나 `--output /tmp/a31-results.json`으로 수치를 저장할 수 있습니다.
+
+```bash
+uv run --env-file backend/.env --locked --extra backend python backend/perf/benchmark.py
+```
+
+스크립트는 질문별 지연 시간, Task 성공·실패 수와 전체 평균을 출력합니다. 요청 자체가 실패하면 오류 종류만 기록하고 나머지 질문을 계속 실행한 뒤 종료 코드 1을 반환합니다. 토큰과 비용은 같은 실행의 LangSmith trace에서 확인합니다. 서로 다른 계획이나 외부 서비스 상태는 지연 시간 비교에 영향을 주므로 Task 수와 trace를 함께 기록합니다.
