@@ -1,4 +1,4 @@
-"""LangSmith 평가자: 응답에서 기대 토픽의 등장 여부를 간단히 확인합니다."""
+"""LangSmith 규칙 평가자: 기대 토픽과 계획 단계의 Task 구조를 확인합니다."""
 
 import re
 
@@ -62,4 +62,52 @@ def has_expected_topics(run: Run, example: Example) -> dict[str, str | float]:
         "key": "has_expected_topics",
         "score": found / len(expected),
         "comment": comment,
+    }
+
+
+def task_structure(run: Run, example: Example) -> dict[str, str | float]:
+    """Task 개수·순서·단순 인사·동일 Research 설명을 통과/실패로 평가합니다.
+
+    완료 상태와 실행 결과는 계획의 품질과 무관하므로 읽지 않습니다.
+    의미상 중복은 LLM Judge가 따로 평가합니다.
+    """
+    tasks = (run.outputs or {}).get("tasks")
+    if not isinstance(tasks, list) or not tasks:
+        return {"key": "task_structure", "score": 0.0, "comment": "Task list is missing or empty."}
+
+    if any(
+        not isinstance(task, dict)
+        or task.get("agent") not in {"research", "writing"}
+        or not isinstance(task.get("description"), str)
+        or not task["description"].strip()
+        for task in tasks
+    ):
+        return {"key": "task_structure", "score": 0.0, "comment": "Task role or description is invalid."}
+
+    failures: list[str] = []
+    if not 1 <= len(tasks) <= 6:
+        failures.append("Task count must be 1-6")
+
+    agents = [task["agent"] for task in tasks]
+    if agents[-1] != "writing" or agents.count("writing") != 1:
+        failures.append("Exactly one Writing task must be last")
+
+    question = example.inputs.get("message") if example.inputs else None
+    if not isinstance(question, str) or not question.strip():
+        return {"key": "task_structure", "score": 0.0, "comment": "Reference question is missing."}
+    plain_question = re.sub(r"[.!?~。！？\s]+", "", question).casefold()
+    if plain_question in {"안녕", "안녕하세요", "반갑습니다", "hi", "hello"} and len(tasks) != 1:
+        failures.append("Simple greeting should use one Writing task")
+
+    research_descriptions = [
+        re.sub(r"\s+", " ", task["description"].strip()).casefold()
+        for task in tasks if task["agent"] == "research"
+    ]
+    if len(research_descriptions) != len(set(research_descriptions)):
+        failures.append("Duplicate Research descriptions")
+
+    return {
+        "key": "task_structure",
+        "score": 0.0 if failures else 1.0,
+        "comment": "; ".join(failures) if failures else "Task structure checks passed.",
     }

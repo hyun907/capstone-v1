@@ -30,12 +30,18 @@ class FakeExperimentResults:
 
 
 class EvalRunnerTests(unittest.IsolatedAsyncioTestCase):
-    async def test_runs_five_examples_with_two_evaluators(self) -> None:
-        rows = [result_row("has_expected_topics", "response_quality") for _ in range(5)]
+    async def test_runs_five_examples_with_five_evaluators(self) -> None:
+        keys = (
+            "has_expected_topics", "response_quality", "task_structure",
+            "plan_quality", "task_decomposition_quality",
+        )
+        rows = [result_row(*keys) for _ in range(5)]
         with patch.dict(os.environ, {"LANGSMITH_API_KEY": "fake", "OPENAI_API_KEY": "fake"}), patch(
             "backend.eval.run_eval.build_target", new=AsyncMock(return_value=object())
         ), patch(
             "backend.eval.run_eval.build_response_quality_judge", return_value=object()
+        ), patch(
+            "backend.eval.run_eval.build_plan_and_task_judges", return_value=(object(), object())
         ), patch(
             "backend.eval.run_eval.aevaluate",
             new=AsyncMock(return_value=FakeExperimentResults(rows)),
@@ -45,7 +51,8 @@ class EvalRunnerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(location, FakeExperimentResults.url)
         self.assertEqual(evaluate.await_args.kwargs["data"], "capstone-ict-operations")
         self.assertEqual(evaluate.await_args.kwargs["max_concurrency"], 2)
-        self.assertEqual(len(evaluate.await_args.kwargs["evaluators"]), 2)
+        self.assertEqual(len(evaluate.await_args.kwargs["evaluators"]), 5)
+        self.assertEqual(evaluate.await_args.kwargs["experiment_prefix"], "supervisor-v2")
 
     async def test_missing_key_stops_before_graph_build(self) -> None:
         with patch.dict(os.environ, {"LANGSMITH_API_KEY": ""}), patch(
@@ -56,8 +63,8 @@ class EvalRunnerTests(unittest.IsolatedAsyncioTestCase):
         build.assert_not_awaited()
 
     def test_missing_score_is_failure(self) -> None:
-        rows = [result_row("has_expected_topics") for _ in range(5)]
-        with self.assertRaisesRegex(RuntimeError, "response_quality"):
+        rows = [result_row("has_expected_topics", "response_quality", "task_structure", "plan_quality") for _ in range(5)]
+        with self.assertRaisesRegex(RuntimeError, "task_decomposition_quality"):
             validate_rows(rows)
 
     def test_failed_run_is_failure(self) -> None:

@@ -20,6 +20,8 @@
 | [`test_backend_eval_evaluators.py`](test_backend_eval_evaluators.py) | 기대 토픽 평가자의 점수와 누락 처리 |
 | [`test_backend_eval_judge.py`](test_backend_eval_judge.py) | LLM Judge의 구조화 점수와 오류 처리 |
 | [`test_backend_eval_runner.py`](test_backend_eval_runner.py) | Experiment 실행 설정과 누락 점수 감지 |
+| [`test_backend_eval_task_structure.py`](test_backend_eval_task_structure.py) | Task 개수·Writing 순서·인사 과분해·중복 규칙 |
+| [`test_backend_eval_plan_task_judge.py`](test_backend_eval_plan_task_judge.py) | 계획과 Task Judge의 입력 분리·점수 계약 |
 
 프로젝트 루트에서 의존성을 설치하고 전체 테스트를 실행합니다.
 
