@@ -84,3 +84,5 @@ curl -N -X POST http://localhost:8000/chat/supervisor/stream \
 ```
 
 LangSmith의 `capstone-observability` 프로젝트에서 이 요청의 trace ID와 실행 시각을 확인합니다. 현재 그래프의 노드 이름은 `planning → (start_task → execute_task)` 반복 → `finalize`입니다. trace에서 Task 순서, Research·Writing 호출, Tool 이름과 인자, 각 단계의 시간과 토큰을 대조합니다. 비용이나 일부 하위 실행 정보가 표시되지 않으면 값을 추정하지 말고 미확인으로 기록합니다. 캡처에는 합성 데이터와 mock 결과만 보이는지 확인한 후, 임시 디렉터리와 환경 파일을 삭제합니다.
+
+O1 제출 전에는 `results.md`의 모든 값과 캡처가 **같은 trace ID**를 가리키는지 확인합니다. `C1.png`, `C2.png`, `C3.png`, `C4-planning.png`, `C4-toolcall.png`를 결과 파일과 함께 `ai-capstone-observability-{캠퍼스}{X반}-{이름}.zip`에 담고 ZIP 내용 목록을 확인합니다. 개인 제출 ZIP과 캡처는 로컬 다운로드 폴더에만 보관하며 Git에 추가하지 않습니다.
