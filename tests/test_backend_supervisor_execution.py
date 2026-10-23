@@ -9,6 +9,8 @@ from langchain_core.tools import tool
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 
 from backend.agent.supervisor_graph import build_supervisor_graph
+from backend.error_handling.classification import classify_exception
+from backend.schemas.error import ErrorLayer, ToolError
 
 
 def plan(*agents: str) -> dict:
@@ -70,7 +72,7 @@ class SupervisorExecutionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(final["current_task_index"], 3)
         self.assertEqual(final["messages"][-1].content, "두 결과를 통합한 답변")
 
-    async def test_followup_replans_and_empty_or_failed_agent_stops(self) -> None:
+    async def test_followup_replans_and_agent_failures_return_fallback(self) -> None:
         def planner(messages):
             users = [message for message in messages if isinstance(message, HumanMessage)]
             return plan("research", "writing") if len(users) == 1 else plan("writing")
@@ -96,21 +98,121 @@ class SupervisorExecutionTests(unittest.IsolatedAsyncioTestCase):
             research_agent=RunnableLambda(failed_research),
             writing_agent=RunnableLambda(lambda _: {"messages": [AIMessage(content="답변")]}),
         )
-        with self.assertRaisesRegex(RuntimeError, "합성 도구 실패"):
-            await failed.ainvoke(
-                {"messages": [{"role": "user", "content": "실패 질문"}]},
-                {"configurable": {"thread_id": "supervisor-failure"}},
-            )
+        failed_result = await failed.ainvoke(
+            {"messages": [{"role": "user", "content": "실패 질문"}]},
+            {"configurable": {"thread_id": "supervisor-failure"}},
+        )
+        self.assertEqual([task["status"] for task in failed_result["tasks"]], ["failed", "completed"])
+        self.assertIn("일부 정보 수집에 실패", failed_result["messages"][-1].content)
+        self.assertNotIn("합성 도구 실패", failed_result["messages"][-1].content)
 
         empty = await build_supervisor_graph(
             planner=RunnableLambda(lambda _: plan("writing")),
             research_agent=RunnableLambda(lambda _: {"messages": [AIMessage(content="조회 결과")]}),
             writing_agent=RunnableLambda(lambda _: {"messages": [AIMessage(content="   ")]}),
         )
-        with self.assertRaisesRegex(ValueError, "빈 답변"):
-            await empty.ainvoke(
-                {"messages": [{"role": "user", "content": "빈 답변 질문"}]},
-                {"configurable": {"thread_id": "supervisor-empty"}},
+        empty_result = await empty.ainvoke(
+            {"messages": [{"role": "user", "content": "빈 답변 질문"}]},
+            {"configurable": {"thread_id": "supervisor-empty"}},
+        )
+        self.assertEqual(empty_result["tasks"][0]["status"], "failed")
+        self.assertTrue(empty_result["messages"][-1].content.strip())
+
+    async def test_tool_failure_keeps_later_research_and_writing(self) -> None:
+        calls = 0
+        writing_requests = []
+
+        def research(_):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise ToolError(classify_exception(
+                    RuntimeError("private-token"), layer=ErrorLayer.TOOL
+                ))
+            return {"messages": [AIMessage(content="두 번째 합성 조회 결과")]}
+
+        def writing(request):
+            writing_requests.append(request["messages"][-1].content)
+            return {"messages": [AIMessage(content="확인된 자료로 답변합니다.")]}
+
+        graph = await build_supervisor_graph(
+            planner=RunnableLambda(lambda _: plan("research", "research", "writing")),
+            research_agent=RunnableLambda(research),
+            writing_agent=RunnableLambda(writing),
+        )
+        result = await graph.ainvoke(
+            {"messages": [{"role": "user", "content": "합성 질문"}]},
+            {"configurable": {"thread_id": "supervisor-partial-success"}},
+        )
+        self.assertEqual([task["status"] for task in result["tasks"]],
+                         ["failed", "completed", "completed"])
+        self.assertEqual(result["current_task_index"], 3)
+        self.assertEqual(result["tasks"][0]["error_code"], "TOOL_EXECUTION_ERROR")
+        self.assertIn("두 번째 합성 조회 결과", writing_requests[0])
+        self.assertIn("실패한 Research 작업", writing_requests[0])
+        self.assertNotIn("private-token", writing_requests[0])
+        self.assertIn("일부 정보 수집에 실패", result["messages"][-1].content)
+
+    async def test_writing_failure_returns_partial_result(self) -> None:
+        graph = await build_supervisor_graph(
+            planner=RunnableLambda(lambda _: plan("research", "writing")),
+            research_agent=RunnableLambda(
+                lambda _: {"messages": [AIMessage(content="합성 수집 자료")]}
+            ),
+            writing_agent=RunnableLambda(lambda _: (_ for _ in ()).throw(RuntimeError("private-token"))),
+        )
+        result = await graph.ainvoke(
+            {"messages": [{"role": "user", "content": "합성 질문"}]},
+            {"configurable": {"thread_id": "supervisor-writing-failure"}},
+        )
+        self.assertEqual([task["status"] for task in result["tasks"]], ["completed", "failed"])
+        self.assertIn("합성 수집 자료", result["messages"][-1].content)
+        self.assertNotIn("private-token", result["messages"][-1].content)
+
+    async def test_no_successful_task_still_returns_nonempty_response(self) -> None:
+        def failed_agent(_):
+            raise RuntimeError("private-token")
+
+        graph = await build_supervisor_graph(
+            planner=RunnableLambda(lambda _: plan("research", "writing")),
+            research_agent=RunnableLambda(failed_agent),
+            writing_agent=RunnableLambda(failed_agent),
+        )
+        result = await graph.ainvoke(
+            {"messages": [{"role": "user", "content": "합성 질문"}]},
+            {"configurable": {"thread_id": "supervisor-no-results"}},
+        )
+        self.assertEqual([task["status"] for task in result["tasks"]], ["failed", "failed"])
+        self.assertIn("다시 시도해 주세요", result["messages"][-1].content)
+        self.assertNotIn("private-token", result["messages"][-1].content)
+
+    async def test_failed_task_does_not_leak_into_next_turn(self) -> None:
+        def planner(messages):
+            users = [message for message in messages if isinstance(message, HumanMessage)]
+            return plan("research", "writing") if len(users) == 1 else plan("writing")
+
+        graph = await build_supervisor_graph(
+            planner=RunnableLambda(planner),
+            research_agent=RunnableLambda(lambda _: (_ for _ in ()).throw(RuntimeError("failure"))),
+            writing_agent=RunnableLambda(lambda _: {"messages": [AIMessage(content="합성 답변")]}),
+        )
+        config = {"configurable": {"thread_id": "supervisor-after-failure"}}
+        first = await graph.ainvoke({"messages": [{"role": "user", "content": "첫 질문"}]}, config)
+        second = await graph.ainvoke({"messages": [{"role": "user", "content": "후속 질문"}]}, config)
+        self.assertEqual(first["tasks"][0]["status"], "failed")
+        self.assertEqual([task["status"] for task in second["tasks"]], ["completed"])
+        self.assertNotIn("일부 정보 수집에 실패", second["messages"][-1].content)
+
+    async def test_planning_failure_still_propagates(self) -> None:
+        graph = await build_supervisor_graph(
+            planner=RunnableLambda(lambda _: (_ for _ in ()).throw(RuntimeError("plan failure"))),
+            research_agent=RunnableLambda(lambda _: {"messages": [AIMessage(content="unused")]}),
+            writing_agent=RunnableLambda(lambda _: {"messages": [AIMessage(content="unused")]}),
+        )
+        with self.assertRaisesRegex(RuntimeError, "plan failure"):
+            await graph.ainvoke(
+                {"messages": [{"role": "user", "content": "합성 질문"}]},
+                {"configurable": {"thread_id": "supervisor-planning-failure"}},
             )
 
     async def test_maximum_task_count_finishes_with_bounded_graph(self) -> None:

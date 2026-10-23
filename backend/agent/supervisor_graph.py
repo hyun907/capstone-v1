@@ -18,6 +18,8 @@ from pydantic import BaseModel, Field, ValidationError, field_validator, model_v
 from backend.agent.graph import READ_ONLY_TOOL_NAMES
 from backend.agent.mcp_client import get_mcp_tools
 from backend.config import AppSettings
+from backend.error_handling.classification import classify_exception
+from backend.schemas.error import ErrorLayer, ToolError
 
 MAX_TASKS = 6
 MAX_PLANNING_ATTEMPTS = 2
@@ -83,8 +85,10 @@ class SupervisorTask(TypedDict):
     id: str
     description: str
     agent: Literal["research", "writing"]
-    status: Literal["pending", "in_progress", "completed"]
+    status: Literal["pending", "in_progress", "completed", "failed"]
     result: str | None
+    error_code: NotRequired[str]
+    error_message: NotRequired[str]
 
 
 class SupervisorState(TypedDict):
@@ -200,24 +204,53 @@ async def build_supervisor_graph(
             agent = writing_agent
             findings = "\n\n".join(
                 f"- {previous['description']}\n  결과: {previous['result']}"
-                for previous in tasks[:index] if previous["agent"] == "research"
+                for previous in tasks[:index]
+                if previous["agent"] == "research" and previous["status"] == "completed"
+            )
+            failures = "\n".join(
+                f"- {previous['description']}: {previous['error_message']}"
+                for previous in tasks[:index]
+                if previous["agent"] == "research" and previous["status"] == "failed"
             )
             request = (
                 f"원래 사용자 요청:\n{latest_user.content}\n\n"
-                f"Research 결과:\n{findings or '조회 작업 없음'}\n\n"
+                f"Research 결과:\n{findings or '확인된 조회 결과 없음'}\n\n"
+                f"실패한 Research 작업:\n{failures or '없음'}\n\n"
+                "확인되지 않은 정보는 추정하지 말고, 실패한 정보 수집은 사용자에게 알려 주세요.\n\n"
                 f"현재 Writing 작업:\n{task['description']}"
             )
 
-        result = await agent.ainvoke(
-            {"messages": [*state["messages"], HumanMessage(content=request)]}
-        )
-        response = result["messages"][-1]
-        if not isinstance(response, AIMessage) or not isinstance(response.content, str):
-            raise ValueError("Sub-Agent가 텍스트 답변을 반환하지 않았습니다.")
-        result_text = response.content.strip()
-        if not result_text:
-            raise ValueError("Sub-Agent가 빈 답변을 반환했습니다.")
-        tasks[index] = {**task, "status": "completed", "result": result_text}
+        try:
+            result = await agent.ainvoke(
+                {"messages": [*state["messages"], HumanMessage(content=request)]}
+            )
+            response = result["messages"][-1]
+            if not isinstance(response, AIMessage) or not isinstance(response.content, str):
+                raise ValueError("Sub-Agent가 텍스트 답변을 반환하지 않았습니다.")
+            result_text = response.content.strip()
+            if not result_text:
+                raise ValueError("Sub-Agent가 빈 답변을 반환했습니다.")
+            tasks[index] = {**task, "status": "completed", "result": result_text}
+        except ToolError as exc:
+            tasks[index] = {
+                **task,
+                "status": "failed",
+                "result": None,
+                "error_code": exc.error.code,
+                "error_message": exc.error.user_message or "도구 사용 중 문제가 발생했습니다.",
+            }
+        except Exception as exc:
+            error = classify_exception(
+                exc, layer=ErrorLayer.ORCHESTRATION,
+                operation="response" if task["agent"] == "writing" else None,
+            )
+            tasks[index] = {
+                **task,
+                "status": "failed",
+                "result": None,
+                "error_code": error.code,
+                "error_message": error.user_message or "작업을 처리하지 못했습니다.",
+            }
         return {"tasks": tasks, "current_task_index": index + 1}
 
     def route_after_execution(state: SupervisorState) -> Literal["start_task", "finalize"]:
@@ -228,14 +261,34 @@ async def build_supervisor_graph(
 
     async def finalize_node(state: SupervisorState) -> dict:
         tasks = state["tasks"]
-        if (
-            not tasks
-            or any(task["status"] != "completed" for task in tasks)
-            or tasks[-1]["agent"] != "writing"
-            or not tasks[-1]["result"]
-        ):
-            raise ValueError("완료된 Writing 작업이 없어 답변을 확정할 수 없습니다.")
-        return {"messages": [AIMessage(content=tasks[-1]["result"])]}
+        if not tasks or tasks[-1]["agent"] != "writing":
+            raise ValueError("Writing 작업이 없어 답변을 확정할 수 없습니다.")
+
+        writing = tasks[-1]
+        failed_count = sum(task["status"] == "failed" for task in tasks)
+        if writing["status"] == "completed" and writing["result"]:
+            final_response = writing["result"]
+            if failed_count:
+                final_response += "\n\n일부 정보 수집에 실패하여 확인된 결과만 반영했습니다."
+        else:
+            partial_results = [
+                f"- {task['description']}: {task['result']}"
+                for task in tasks[:-1]
+                if task["status"] == "completed" and task["result"]
+            ]
+            if partial_results:
+                final_response = (
+                    "응답 생성에 문제가 있어 확인된 자료를 그대로 전달합니다. "
+                    + ("일부 정보 수집에도 실패했습니다. " if failed_count > 1 else "")
+                    + "\n\n"
+                    + "\n".join(partial_results)
+                )
+            else:
+                final_response = (
+                    "요청을 처리하는 중 문제가 발생해 정보를 확인하지 못했습니다. "
+                    "잠시 후 다시 시도해 주세요."
+                )
+        return {"messages": [AIMessage(content=final_response)]}
 
     workflow = StateGraph(SupervisorState)
     workflow.add_node("planning", planning_node)

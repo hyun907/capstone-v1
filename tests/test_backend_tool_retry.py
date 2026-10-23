@@ -77,7 +77,7 @@ class ToolRetryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(caught.exception.error.code, "TOOL_EXECUTION_ERROR")
         self.assertNotIn("private-token", caught.exception.error.user_message)
 
-    async def test_wrapped_tool_error_reaches_supervisor(self) -> None:
+    async def test_wrapped_tool_error_is_caught_by_supervisor_task(self) -> None:
         async def failing_status(system_name: str) -> str:
             raise RuntimeError("private-token")
 
@@ -97,12 +97,13 @@ class ToolRetryTests(unittest.IsolatedAsyncioTestCase):
                 lambda _: {"messages": [AIMessage(content="합성 답변")]}
             ),
         )
-        with self.assertRaises(ToolError) as caught:
-            await graph.ainvoke(
-                {"messages": [{"role": "user", "content": "상태 확인"}]},
-                {"configurable": {"thread_id": "tool-supervisor-propagation"}},
-            )
-        self.assertEqual(caught.exception.error.code, "TOOL_EXECUTION_ERROR")
+        result = await graph.ainvoke(
+            {"messages": [{"role": "user", "content": "상태 확인"}]},
+            {"configurable": {"thread_id": "tool-supervisor-propagation"}},
+        )
+        self.assertEqual(result["tasks"][0]["status"], "failed")
+        self.assertEqual(result["tasks"][0]["error_code"], "TOOL_EXECUTION_ERROR")
+        self.assertEqual(result["tasks"][1]["status"], "completed")
 
 
 if __name__ == "__main__":
