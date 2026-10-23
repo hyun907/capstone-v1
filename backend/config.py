@@ -12,13 +12,16 @@ class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(populate_by_name=True)
 
     model_name: str = Field(default="gpt-4o", validation_alias="OPENAI_MODEL")
+    planning_model_name: str = Field(
+        default="gpt-4o-mini", validation_alias="OPENAI_PLANNING_MODEL"
+    )
 
-    @field_validator("model_name")
+    @field_validator("model_name", "planning_model_name")
     @classmethod
     def reject_blank_model(cls, value: str) -> str:
         model_name = value.strip()
         if not model_name:
-            raise ValueError("OPENAI_MODEL은 비어 있을 수 없습니다.")
+            raise ValueError("모델 이름은 비어 있을 수 없습니다.")
         return model_name
 
     @property
