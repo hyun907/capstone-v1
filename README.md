@@ -96,13 +96,14 @@ uv run --locked --extra backend python -m unittest discover -s tests -p 'test_ba
 
 ### Backend HTTP 채팅
 
-프로젝트 루트에서 Backend를 실행합니다. 시작 시 MCP 도구와 Agent를 한 번 준비하므로 `OPENAI_API_KEY`가 설정되어 있어야 합니다. 실제 원본 데이터가 포함된 질문을 모델에 보내기 전에는 데이터 사용 권한을 확인해야 합니다.
+프로젝트 루트에서 PostgreSQL을 시작하고 Backend를 실행합니다. 시작 시 MCP 도구와 Agent를 한 번 준비하므로 `OPENAI_API_KEY`와 `DATABASE_URL`이 설정되어 있어야 합니다. 실제 원본 데이터가 포함된 질문을 모델에 보내기 전에는 데이터 사용 권한을 확인해야 합니다.
 
 ```bash
-uv run --locked --extra backend uvicorn backend.main:app
+docker compose up -d postgres
+uv run --env-file backend/.env --locked --extra backend uvicorn backend.main:app
 ```
 
-`GET /health`는 `{"status":"ok"}`를 반환합니다. `POST /chat`은 `{"message":"질문","thread_id":"기존 ID"}`를 받고, `thread_id`를 생략하면 UUID를 만들어 응답에 포함합니다. 같은 `thread_id`를 다시 보내면 프로세스 메모리에 보관된 대화를 이어갑니다. 응답의 `tool_calls`에는 이번 요청의 도구 이름과 인자만 들어갑니다. Agent 실행 실패는 HTTP 500으로 전파되며 내부 예외나 비밀값을 응답에 넣지 않습니다.
+`GET /health`는 `{"status":"ok"}`를 반환합니다. `POST /chat`은 `{"message":"질문","thread_id":"기존 ID"}`를 받고, `thread_id`를 생략하면 UUID를 만들어 응답에 포함합니다. 같은 `thread_id`를 다시 보내면 PostgreSQL에 보관된 대화를 이어갑니다. 응답의 `tool_calls`에는 이번 요청의 도구 이름과 인자만 들어갑니다. Agent 실행 실패는 HTTP 500으로 전파되며 내부 예외나 비밀값을 응답에 넣지 않습니다.
 
 외부 모델 없이 합성 Agent로 HTTP 계약을 확인합니다.
 
