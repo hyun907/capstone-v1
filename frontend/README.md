@@ -24,8 +24,8 @@ npm run dev
 
 1. [`app/page.tsx`](app/page.tsx)가 `useChat`을 만들고 화면의 메시지·오류·새 대화 상태를 관리합니다.
 2. [`lib/thread.ts`](lib/thread.ts)가 브라우저 `localStorage`에 단일·Supervisor 모드별 대화 ID를 따로 보관합니다. 새로고침하면 ID는 유지되지만 화면의 메시지는 다시 시작합니다.
-3. [`lib/transport.ts`](lib/transport.ts)가 Backend SSE를 읽어 AI SDK 메시지 조각으로 바꿉니다. 단일 Agent 도구 상태는 `data-toolProgress`, Supervisor 진행은 `data-supervisorProgress`로 전달합니다.
-4. [`components/`](components/)가 메시지, 입력창, 도구 박스, Supervisor의 Plan·Task 카드를 그립니다. 이벤트 필드는 [`lib/types.ts`](lib/types.ts)와 Backend의 [`stream.py`](../backend/schemas/stream.py)에 대응합니다.
+3. [`lib/transport.ts`](lib/transport.ts)가 Backend SSE를 읽어 AI SDK 메시지 조각으로 바꿉니다. 단일 Agent 도구 상태는 `data-toolProgress`, Supervisor 진행은 `data-supervisorProgress`로 전달합니다. Supervisor의 `error` 이벤트는 `data-errorBanner`로 남겨 이미 받은 Plan·Task·본문을 보존합니다.
+4. [`components/`](components/)가 메시지, 입력창, 도구 박스, Supervisor의 Plan·Task 카드를 그립니다. 실패 Task는 빨간 카드와 안전한 오류 문구로, 스트림 오류는 복구 가능성에 따라 경고 또는 오류 배너로 표시합니다. 이벤트 필드는 [`lib/types.ts`](lib/types.ts)와 Backend의 [`stream.py`](../backend/schemas/stream.py)에 대응합니다.
 
 Backend의 대화 기록은 `MemorySaver`에 있으므로 Backend를 재시작하면 이전 문맥이 사라집니다. 브라우저의 ID가 남아 있어도 이전 대화 내용을 복원할 수는 없습니다.
 

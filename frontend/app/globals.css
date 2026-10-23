@@ -45,16 +45,19 @@ h1 { margin: 8px 0 6px; font-size: 25px; line-height: 1.25; letter-spacing: -.03
 .task-card { padding: 11px 13px; border: 1px solid #d9e0e4; border-radius: 9px; background: #f8fafb; font-size: 12px; }
 .task-card.task-in_progress { border-color: #e7c884; background: #fff9e9; }
 .task-card.task-completed { border-color: #add9c7; background: #effaf4; }
+.task-card.task-failed { border-color: #e5a5a0; background: #fff0ee; }
 .task-heading { display: flex; align-items: start; gap: 8px; }
 .task-status { flex: none; font-weight: 700; color: #61717b; }
 .task-in_progress .task-status { color: #996418; }
 .task-completed .task-status { color: #297955; }
+.task-failed .task-status { color: #a52d2d; }
 .task-description { flex: 1; line-height: 1.45; }
 .task-heading code { flex: none; color: #657783; font-size: 11px; }
 .task-token { margin: 9px 0 0; padding: 8px; border-radius: 6px; background: #fff; color: #596b75; white-space: pre-wrap; overflow-wrap: anywhere; }
 .task-tool, .task-result { margin-top: 9px; color: #586a75; }
 .task-tool summary, .task-result summary { cursor: pointer; }
 .task-tool p, .task-result p { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.task-error { margin: 9px 0 0; color: #942d2d; line-height: 1.5; }
 .tool-card { margin: 2px 0 12px; border: 1px solid #d6e4e6; border-radius: 9px; background: #fff; padding: 11px 13px; font-size: 12px; }
 .tool-heading { display: flex; align-items: center; gap: 7px; color: #3e6571; font-weight: 700; flex-wrap: wrap; }
 .tool-heading code { margin-left: auto; color: #254653; font-weight: 500; }
@@ -67,6 +70,9 @@ h1 { margin: 8px 0 6px; font-size: 25px; line-height: 1.25; letter-spacing: -.03
 .tool-card pre { margin: 0; padding: 8px; background: #f6f8f9; border-radius: 5px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .progress-note { color: #607786; font-size: 13px; }
 .error-note { padding: 11px 13px; border-radius: 8px; background: #fff3f0; color: #9f3e2c; font-size: 13px; }
+.error-banner { display: flex; align-items: start; gap: 8px; margin: 10px 0; padding: 11px 13px; border: 1px solid; border-radius: 8px; font-size: 13px; line-height: 1.5; }
+.error-banner-warning { border-color: #e7c884; background: #fff9e9; color: #79540f; }
+.error-banner-critical { border-color: #e5a5a0; background: #fff0ee; color: #942d2d; }
 .footer { border-top: 1px solid #e8edf1; padding: 18px 32px 22px; background: #fff; }
 .chat-input { display: flex; gap: 9px; }
 .chat-input input { min-width: 0; flex: 1; border: 1px solid #cbd7dc; border-radius: 9px; padding: 12px 14px; outline: none; }

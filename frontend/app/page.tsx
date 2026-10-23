@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ChatInput } from "@/components/ChatInput";
 import { ChatMessage } from "@/components/ChatMessage";
+import { ErrorBanner } from "@/components/ErrorBanner";
 import { getOrCreateThreadId, startNewThread } from "@/lib/thread";
 import { BackendChatTransport } from "@/lib/transport";
 import type { AppMessage, ChatMode } from "@/lib/types";
@@ -73,7 +74,7 @@ function ChatSession({ mode, threadId, onNewThread, onChangeMode }: {
           messages.map((message) => <ChatMessage key={message.id} message={message} />)
         )}
         {busy && <p className="progress-note">{status === "submitted" ? "응답을 시작하는 중…" : "응답 생성 중…"}</p>}
-        {error && <p className="error-note" role="alert">{error.message}</p>}
+        {error && <ErrorBanner message={error.message} recoverable={false} />}
         <div ref={bottomRef} />
       </main>
 
