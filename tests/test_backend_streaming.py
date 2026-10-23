@@ -14,6 +14,7 @@ from backend.main import app
 from backend.schemas.stream import TokenEvent
 from backend.streaming.event_converter import convert_langgraph_events
 from backend.streaming.sse_formatter import format_sse
+from backend_test_helpers import fake_checkpointer
 from test_backend_agent_graph import SYNTHETIC_TOOLS, SyntheticChatModel
 
 
@@ -85,6 +86,9 @@ class EventConverterTests(unittest.IsolatedAsyncioTestCase):
 
 class StreamingEndpointTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
+        checkpointer_patcher = patch("backend.main.create_checkpointer", fake_checkpointer)
+        checkpointer_patcher.start()
+        self.addCleanup(checkpointer_patcher.stop)
         supervisor_patcher = patch(
             "backend.main.build_supervisor_graph", new=AsyncMock(return_value=object())
         )

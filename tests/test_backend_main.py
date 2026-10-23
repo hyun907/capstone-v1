@@ -2,6 +2,7 @@
 
 import unittest
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, patch
 from uuid import UUID
@@ -10,6 +11,7 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 
 from backend.main import app
+from backend_test_helpers import fake_checkpointer
 
 
 class SyntheticAgent:
@@ -51,6 +53,9 @@ class SyntheticAgent:
 
 class BackendMainTests(unittest.TestCase):
     def setUp(self) -> None:
+        checkpointer_patcher = patch("backend.main.create_checkpointer", fake_checkpointer)
+        checkpointer_patcher.start()
+        self.addCleanup(checkpointer_patcher.stop)
         supervisor_patcher = patch(
             "backend.main.build_supervisor_graph", new=AsyncMock(return_value=object())
         )
@@ -96,7 +101,30 @@ class BackendMainTests(unittest.TestCase):
                 self.assertEqual(other.json()["thread_id"], "other")
                 self.assertEqual(len(agent.histories["other"]), 2)
 
-            builder.assert_awaited_once_with()
+            builder.assert_awaited_once_with(checkpointer=unittest.mock.ANY)
+
+    def test_lifespan_shares_and_closes_checkpointer(self) -> None:
+        saver = object()
+        closed = []
+
+        @asynccontextmanager
+        async def checkpointer():
+            try:
+                yield saver
+            finally:
+                closed.append(True)
+
+        with patch("backend.main.create_checkpointer", checkpointer):
+            with patch("backend.main.build_agent", new=AsyncMock(return_value=SyntheticAgent())) as agent_builder:
+                with patch("backend.main.build_supervisor_graph", new=AsyncMock(return_value=object())) as supervisor_builder:
+                    with TestClient(app) as client:
+                        self.assertIs(client.app.state.checkpointer, saver)
+                        agent_builder.assert_awaited_once_with(checkpointer=saver)
+                        supervisor_builder.assert_awaited_once_with(checkpointer=saver)
+                        self.assertEqual(closed, [])
+
+        self.assertEqual(closed, [True])
+        self.assertFalse(hasattr(app.state, "checkpointer"))
 
     def test_request_validation_and_agent_failure(self) -> None:
         agent = SyntheticAgent()

@@ -15,7 +15,7 @@ AI Agent 서비스를 단계별로 직접 구현하고 검증하는 개인 실�
 
 처음에는 [Backend 입구](backend/README.md)에서 `POST /chat` 요청이 어디로 가는지 살펴보세요. 이어서 [Agent](backend/agent/README.md), [MCP 서버](mcp-server/README.md), [API 계약](backend/schemas/README.md), [테스트](tests/README.md)를 읽으면 현재 동작을 한 바퀴 따라갈 수 있습니다. 각 문서는 해당 폴더의 **현재 코드**를 설명하는 학습용 메모입니다.
 
-현재 단일 Agent의 `/chat`·`/chat/stream`, Supervisor의 `/chat/supervisor/stream`, Next.js의 모드별 화면까지 구현되어 있습니다. 대화 기록은 `MemorySaver`의 프로세스 메모리에 저장됩니다. 라우팅과 PostgreSQL 영구 저장은 이후 단계입니다.
+현재 단일 Agent의 `/chat`·`/chat/stream`, Supervisor의 `/chat/supervisor/stream`, Next.js의 모드별 화면까지 구현되어 있습니다. Backend를 실행할 때 대화 상태는 PostgreSQL checkpointer에 저장됩니다.
 
 ## 작업 방식
 
@@ -86,7 +86,7 @@ MCP 클라이언트는 도구 연결만 제공합니다. HTTP 엔드포인트에
 
 `backend.agent.graph.build_agent()`는 기존 MCP 클라이언트가 찾은 Tool 4개 중 조회용 3개(`get_monitoring_status`, `search_operations_manual`, `search_jira_tickets`)만 Agent에 연결합니다. `create_jira_ticket`은 채팅 요청 스키마에 신뢰할 수 있는 생성 승인값이 없어 제외했습니다. Agent에는 시스템 상태·매뉴얼·Jira 이력 질문에 맞는 조회 도구를 선택하고 mock 응답을 구분하도록 지시합니다. 이번 FastAPI 통합 단계에서는 도구 실행 오류를 잡지 않고 Backend까지 전파합니다.
 
-모델은 기본 `gpt-4o`이며 `OPENAI_MODEL`로 변경할 수 있습니다. `MemorySaver`는 같은 Agent 인스턴스와 `configurable.thread_id`를 재사용할 때 대화를 이어 줍니다. 메모리는 프로세스 RAM에만 있고 재시작하면 사라집니다. Agent 실행에는 기본 `recursion_limit=12`를 적용해 도구 호출 반복을 제한합니다. 합성 테스트에서는 원본 데이터를 외부 모델로 보내지 않습니다. 실제 `/chat` 실행에서는 검색 도구의 반환 내용이 모델에 전달되므로 데이터 사용 권한을 확인해야 합니다.
+모델은 기본 `gpt-4o`이며 `OPENAI_MODEL`로 변경할 수 있습니다. Backend lifespan은 PostgreSQL checkpointer를 두 그래프에 주입합니다. 같은 `configurable.thread_id`로 대화를 이어갈 수 있으며, 그래프를 직접 빌드하면서 saver를 생략한 경우에만 `MemorySaver`를 사용합니다. Agent 실행에는 기본 `recursion_limit=12`를 적용해 도구 호출 반복을 제한합니다. 합성 테스트에서는 원본 데이터를 외부 모델로 보내지 않습니다. 실제 `/chat` 실행에서는 검색 도구의 반환 내용이 모델에 전달되므로 데이터 사용 권한을 확인해야 합니다.
 
 외부 API와 원본 데이터를 쓰지 않는 합성 테스트:
 
