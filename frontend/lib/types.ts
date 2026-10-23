@@ -33,6 +33,12 @@ export interface ToolProgress {
   result?: string | null;
 }
 
+export interface ErrorBannerData {
+  code: Extract<StreamEvent, { type: "error" }>["code"];
+  message: string;
+  recoverable: boolean;
+}
+
 export type SupervisorProgress = Extract<StreamEvent, {
   type: "plan_created" | "task_list_created" | "task_started" | "task_completed" |
     "sub_agent_token" | "sub_agent_tool_call";
@@ -41,4 +47,5 @@ export type SupervisorProgress = Extract<StreamEvent, {
 export type AppMessage = UIMessage<unknown, {
   toolProgress: ToolProgress;
   supervisorProgress: SupervisorProgress;
+  errorBanner: ErrorBannerData;
 }>;

@@ -191,3 +191,64 @@ test("잘못된 Supervisor 이벤트는 수락하지 않는다", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("Supervisor 실패 Task와 부분 답변은 복구 가능 오류 후에도 메시지에 남는다", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => mockSse([
+    frame("plan_created", { type: "plan_created", plan: "합성 계획" }),
+    frame("task_list_created", { type: "task_list_created", tasks: [
+      { id: "task_1", description: "조회", agent: "research", status: "pending", result: null },
+      { id: "task_2", description: "작성", agent: "writing", status: "pending", result: null },
+    ] }),
+    frame("task_started", { type: "task_started", task_id: "task_1", agent_name: "research" }),
+    frame("task_completed", { type: "task_completed", task_id: "task_1", status: "failed",
+      result_preview: null, error_message: "도구 사용 중 문제가 발생했습니다." }),
+    frame("task_started", { type: "task_started", task_id: "task_2", agent_name: "writing" }),
+    frame("task_completed", { type: "task_completed", task_id: "task_2", status: "completed",
+      result_preview: "부분 답변", error_message: null }),
+    frame("token", { type: "token", content: "부분 답변" }),
+    frame("error", { type: "error", code: "STREAM_INTERRUPTED",
+      message: "스트림이 중단되었습니다.", recoverable: true }),
+  ]);
+  try {
+    const chat = new Chat<AppMessage>({
+      id: "multi-error-thread",
+      transport: new BackendChatTransport("http://localhost:8000", "multi"),
+    });
+    await chat.sendMessage({ text: "합성 질문" });
+    const parts = chat.messages[1].parts;
+    const progress = parts.filter((part) => part.type === "data-supervisorProgress")
+      .map((part) => part.data);
+    assert.deepEqual(progress.filter((event) => event.type === "task_completed")
+      .map((event) => event.status), ["failed", "completed"]);
+    assert.equal(parts.filter((part) => part.type === "text")
+      .map((part) => part.text).join(""), "부분 답변");
+    const banner = parts.find((part) => part.type === "data-errorBanner");
+    assert.equal(banner?.data.recoverable, true);
+    assert.equal(banner?.data.message, "스트림이 중단되었습니다.");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("복구 불가 Supervisor 오류도 배너로 남는다", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => mockSse([
+    frame("token", { type: "token", content: "먼저 받은 내용" }),
+    frame("error", { type: "error", code: "STREAM_INTERRUPTED",
+      message: "요청이 중단되었습니다.", recoverable: false }),
+  ]);
+  try {
+    const chat = new Chat<AppMessage>({
+      id: "multi-critical-thread",
+      transport: new BackendChatTransport("http://localhost:8000", "multi"),
+    });
+    await chat.sendMessage({ text: "합성 질문" });
+    const parts = chat.messages[1].parts;
+    assert.equal(parts.filter((part) => part.type === "text")
+      .map((part) => part.text).join(""), "먼저 받은 내용");
+    assert.equal(parts.find((part) => part.type === "data-errorBanner")?.data.recoverable, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

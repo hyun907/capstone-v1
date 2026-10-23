@@ -148,6 +148,7 @@ export class BackendChatTransport implements ChatTransport<AppMessage> {
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    const mode = this.mode;
 
     return new ReadableStream<UIMessageChunk>({
       async start(controller) {
@@ -234,7 +235,13 @@ export class BackendChatTransport implements ChatTransport<AppMessage> {
               finished = true;
               break;
             case "error":
-              throw new Error(event.message);
+              if (mode === "single") throw new Error(event.message);
+              controller.enqueue({ type: "data-errorBanner", id: crypto.randomUUID(),
+                data: { code: event.code, message: event.message, recoverable: event.recoverable } });
+              if (textStarted) controller.enqueue({ type: "text-end", id: textId });
+              controller.enqueue({ type: "finish" });
+              finished = true;
+              break;
           }
         };
 

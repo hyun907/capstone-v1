@@ -24,7 +24,8 @@ export function TaskListView({ tasks }: { tasks: TaskView[] }) {
           <li key={task.id} className={`task-card task-${task.status}`}>
             <div className="task-heading">
               <span className="task-status">
-                {task.status === "pending" ? "대기" : task.status === "in_progress" ? "진행 중" : "완료"}
+                {task.status === "pending" ? "대기" : task.status === "in_progress" ? "진행 중" :
+                  task.status === "failed" ? "실패" : "완료"}
               </span>
               <span className="task-description">{task.description}</span>
               <code>{task.agent}</code>
@@ -44,6 +45,9 @@ export function TaskListView({ tasks }: { tasks: TaskView[] }) {
                 <summary>결과 보기</summary>
                 <p>{task.result}</p>
               </details>
+            )}
+            {task.status === "failed" && task.error_message && (
+              <p className="task-error">{task.error_message}</p>
             )}
           </li>
         ))}

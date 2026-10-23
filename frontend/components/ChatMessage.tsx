@@ -1,5 +1,6 @@
 import type { AppMessage } from "@/lib/types";
 
+import { ErrorBanner } from "./ErrorBanner";
 import { PlanView } from "./PlanView";
 import { TaskListView, type TaskView } from "./TaskListView";
 import { ToolCallView } from "./ToolCallView";
@@ -19,7 +20,8 @@ export function ChatMessage({ message }: { message: AppMessage }) {
       tasks = tasks.map((task) => task.id === event.task_id ? { ...task, status: "in_progress" } : task);
     } else if (event.type === "task_completed") {
       tasks = tasks.map((task) => task.id === event.task_id ? {
-        ...task, status: "completed", result: event.result_preview,
+        ...task, status: event.status, result: event.result_preview,
+        error_message: event.error_message ?? undefined,
       } : task);
     } else if (event.type === "sub_agent_token") {
       tasks = tasks.map((task) => task.id === event.task_id ? { ...task, token: event.content } : task);
@@ -49,6 +51,10 @@ export function ChatMessage({ message }: { message: AppMessage }) {
           }
           if (part.type === "data-toolProgress") {
             return <ToolCallView key={part.id ?? `tool-${index}`} tool={part.data} />;
+          }
+          if (part.type === "data-errorBanner") {
+            return <ErrorBanner key={part.id ?? `error-${index}`}
+              message={part.data.message} recoverable={part.data.recoverable} />;
           }
           return null;
         })}
