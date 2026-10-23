@@ -86,3 +86,11 @@ curl -N -X POST http://localhost:8000/chat/supervisor/stream \
 LangSmith의 `capstone-observability` 프로젝트에서 이 요청의 trace ID와 실행 시각을 확인합니다. 현재 그래프의 노드 이름은 `planning → (start_task → execute_task)` 반복 → `finalize`입니다. trace에서 Task 순서, Research·Writing 호출, Tool 이름과 인자, 각 단계의 시간과 토큰을 대조합니다. 비용이나 일부 하위 실행 정보가 표시되지 않으면 값을 추정하지 말고 미확인으로 기록합니다. 캡처에는 합성 데이터와 mock 결과만 보이는지 확인한 후, 임시 디렉터리와 환경 파일을 삭제합니다.
 
 O1 제출 전에는 `results.md`의 모든 값과 캡처가 **같은 trace ID**를 가리키는지 확인합니다. `C1.png`, `C2.png`, `C3.png`, `C4-planning.png`, `C4-toolcall.png`를 결과 파일과 함께 `ai-capstone-observability-{캠퍼스}{X반}-{이름}.zip`에 담고 ZIP 내용 목록을 확인합니다. 개인 제출 ZIP과 캡처는 로컬 다운로드 폴더에만 보관하며 Git에 추가하지 않습니다.
+
+## Error Handling 통합 관찰 (A30)
+
+2026-10-23에 추적 제외된 격리 복사본에 합성 runbook·모니터링 데이터만 넣고 Backend와 Frontend를 실행했습니다. F1의 데이터베이스 다운 대응 절차 질문은 Research와 Writing 두 Task가 모두 `completed`로 끝났고 최종 답변과 `done`을 받았습니다.
+
+E1에서는 Backend를 시작한 뒤 격리 복사본의 MCP 서버 파일 접근을 막았습니다. 원문 질문은 한 번의 실행에서 Writing Task 하나만 계획해 도구 실패를 재현하지 못했습니다. 매뉴얼 검색을 명시한 재시도에서는 Research가 `failed`, Writing이 `completed`로 끝났으며 실패 카드, 실패 안내가 포함된 최종 답변, `done`을 확인했습니다. LangSmith trace에도 `planning → execute_task` 두 번 → `finalize`가 남았습니다. 그래프 전체는 부분 응답으로 정상 종료되므로 root trace의 성공 표시와 개별 Task 실패를 함께 확인해야 합니다. 테스트 후 파일 권한을 복구했습니다.
+
+자동 검증은 프로젝트 루트에서 `uv run --locked --extra backend python -m unittest discover -s tests -q`, `frontend/`에서 `npm test`와 `npm run build`로 실행합니다. 실제 질문에 대한 Task 분해는 모델 출력에 따라 달라질 수 있어 원문 질문만으로 Research 실행이 보장되지는 않습니다. 개인 관찰 캡처와 결과 문서는 공개 저장소에 넣지 않습니다.
