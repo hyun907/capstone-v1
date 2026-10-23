@@ -8,6 +8,7 @@ from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableLambda
 from langchain_core.tools import tool
+from langgraph.checkpoint.memory import MemorySaver
 
 from backend.agent.supervisor_graph import build_supervisor_graph
 from backend.error_handling.classification import classify_exception
@@ -25,6 +26,35 @@ def plan(*agents: str) -> dict:
 
 
 class SupervisorExecutionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_injected_checkpointer_survives_supervisor_rebuild(self) -> None:
+        saver = MemorySaver()
+        config = {"configurable": {"thread_id": "injected-supervisor-thread"}}
+
+        def planner(messages):
+            users = [message for message in messages if isinstance(message, HumanMessage)]
+            return plan("writing") if len(users) == 1 else {
+                "plan": "이전 대화를 참고합니다.",
+                "tasks": [{"description": f"첫 질문은 {users[0].content}", "agent": "writing"}],
+            }
+
+        async def build():
+            return await build_supervisor_graph(
+                planner=RunnableLambda(planner),
+                research_agent=RunnableLambda(lambda _: {"messages": [AIMessage(content="조회")]}),
+                writing_agent=RunnableLambda(
+                    lambda request: {"messages": [AIMessage(content=request["messages"][-1].content)]}
+                ),
+                checkpointer=saver,
+            )
+
+        await (await build()).ainvoke(
+            {"messages": [{"role": "user", "content": "기억할 질문"}]}, config
+        )
+        result = await (await build()).ainvoke(
+            {"messages": [{"role": "user", "content": "첫 질문은?"}]}, config
+        )
+        self.assertIn("기억할 질문", result["messages"][-1].content)
+
     async def test_research_runs_concurrently_and_writing_receives_all_results(self) -> None:
         calls = []
         started = set()

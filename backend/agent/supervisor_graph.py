@@ -319,6 +319,8 @@ async def build_supervisor_graph(
     workflow.add_edge("execute_research", "execute_writing")
     workflow.add_edge("execute_writing", "finalize")
     workflow.add_edge("finalize", END)
-    return workflow.compile(checkpointer=checkpointer or MemorySaver()).with_config(
+    return workflow.compile(
+        checkpointer=checkpointer if checkpointer is not None else MemorySaver()
+    ).with_config(
         {"recursion_limit": SUPERVISOR_RECURSION_LIMIT}
     )

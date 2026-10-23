@@ -12,6 +12,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMe
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import BaseTool, tool
 from langgraph.errors import GraphRecursionError
+from langgraph.checkpoint.memory import MemorySaver
 from pydantic import PrivateAttr
 
 from backend.agent.graph import AGENT_RECURSION_LIMIT, SYSTEM_PROMPT, build_agent
@@ -105,6 +106,24 @@ class SyntheticChatModel(BaseChatModel):
 
 
 class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
+    async def test_injected_checkpointer_survives_agent_rebuild(self) -> None:
+        saver = MemorySaver()
+        config = {"configurable": {"thread_id": "injected-agent-thread"}}
+        first_agent = await build_agent(
+            model=SyntheticChatModel(), tools=SYNTHETIC_TOOLS, checkpointer=saver
+        )
+        await first_agent.ainvoke(
+            {"messages": [{"role": "user", "content": "첫 질문"}]}, config
+        )
+
+        rebuilt_agent = await build_agent(
+            model=SyntheticChatModel(), tools=SYNTHETIC_TOOLS, checkpointer=saver
+        )
+        result = await rebuilt_agent.ainvoke(
+            {"messages": [{"role": "user", "content": "후속 질문"}]}, config
+        )
+        self.assertIn("첫 질문: 첫 질문; 최근 질문: 후속 질문", result["messages"][-1].content)
+
     async def test_remembers_same_thread_and_isolates_other_thread(self) -> None:
         model = SyntheticChatModel()
         agent = await build_agent(model=model, tools=SYNTHETIC_TOOLS)

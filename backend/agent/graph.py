@@ -7,6 +7,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 
 from backend.agent.mcp_client import get_mcp_tools
@@ -37,6 +38,7 @@ async def build_agent(
     model: BaseChatModel | None = None,
     tools: Sequence[BaseTool] | None = None,
     recursion_limit: int = AGENT_RECURSION_LIMIT,
+    checkpointer: BaseCheckpointSaver | None = None,
 ) -> Runnable:
     """thread_id별 대화를 기억하는 Agent를 만듭니다.
 
@@ -63,6 +65,6 @@ async def build_agent(
         model=chat_model,
         tools=read_only_tools,
         system_prompt=SYSTEM_PROMPT,
-        checkpointer=MemorySaver(),
+        checkpointer=checkpointer if checkpointer is not None else MemorySaver(),
     )
     return agent.with_config({"recursion_limit": recursion_limit})
